@@ -1,5 +1,9 @@
 # app-core
 
+The root `Cargo.toml` is a virtual workspace. Application code and examples live
+in `crates/app-core/{src,examples}/`; coordination contracts remain a separate
+workspace package. Run build and check commands from the repository root.
+
 Initial scaffold for Idle. Module ownership, current behavior, and build
 instructions are documented below; reserved modules are intentionally empty.
 
@@ -25,7 +29,7 @@ Rust, Clippy and Rustdoc rules and its thresholds in `clippy.toml`.
 
 ```sh
 bash scripts/check.sh
-cargo run --locked --example bootstrap
+cargo run --locked -p app-core --example bootstrap
 cargo build --workspace --locked --target wasm32-unknown-unknown
 ```
 
@@ -35,13 +39,13 @@ No sibling repository is required to build this repository.
 | --- | --- |
 | Root manifest, exports, bootstrap/runtime and bindings | f21/crux-runtime |
 | `crates/coordination-contracts`, its manifest, exports and future schemas | f20/coordination-contracts |
-| `src/workspace.rs` | f22/workspace-state |
-| `src/history.rs` | f23/history-state |
-| `src/sessions.rs` | f24/session-state |
-| `src/projections.rs` | f25/projection-state |
-| `src/resources.rs` | f26/resource-state |
-| `src/configuration.rs` | f27/settings-rules-state |
-| `src/subscriptions.rs` | f28/subscription-state |
+| `crates/app-core/src/workspace.rs` | f22/workspace-state |
+| `crates/app-core/src/history.rs` | f23/history-state |
+| `crates/app-core/src/sessions.rs` | f24/session-state |
+| `crates/app-core/src/projections.rs` | f25/projection-state |
+| `crates/app-core/src/resources.rs` | f26/resource-state |
+| `crates/app-core/src/configuration.rs` | f27/settings-rules-state |
+| `crates/app-core/src/subscriptions.rs` | f28/subscription-state |
 
 The coordination crate lets runtimes and coordination adapters consume shared
 contracts without depending on the Crux application model. Its wire schemas and

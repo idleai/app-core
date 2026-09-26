@@ -1,0 +1,19 @@
+[package]
+name = "app-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+publish = false
+description = "Idle shared application state and Crux bootstrap"
+repository = "https://github.com/idleai/app-core"
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+crux_core = { version = "=0.20.0", default-features = false }
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true
