@@ -1,0 +1,281 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShellContract",
+  "description": "Schema entrypoint grouping the four wire payload types, not a wire envelope.",
+  "type": "object",
+  "properties": {
+    "event": {
+      "description": "Client actions accepted by `process_event`.",
+      "$ref": "#/$defs/Event"
+    },
+    "host_info_result": {
+      "description": "Output expected for a host information request.",
+      "$ref": "#/$defs/Result_of_HostInfo_or_EffectError"
+    },
+    "requests": {
+      "description": "Effect batches returned by event and response calls.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/EffectRequest"
+      }
+    },
+    "view": {
+      "description": "Presentation state returned by `view`.",
+      "$ref": "#/$defs/ViewModel"
+    }
+  },
+  "required": [
+    "event",
+    "requests",
+    "host_info_result",
+    "view"
+  ],
+  "$defs": {
+    "EffectError": {
+      "description": "A host-reported operation failure suitable for presentation.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "description": "A host-supplied explanation, without credentials or private diagnostics.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "message"
+      ]
+    },
+    "EffectFfi": {
+      "description": "Serializable operations, without Rust continuation handles.",
+      "oneOf": [
+        {
+          "description": "A notification; call `view`, and do not return a response for this ID.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "render"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Return a [`HostInfoResult`] for this request ID.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "host_info"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "EffectRequest": {
+      "description": "Serializable effect request; IDs are local to one live shell instance.",
+      "type": "object",
+      "properties": {
+        "effect": {
+          "description": "Operation for the host adapter to execute.",
+          "$ref": "#/$defs/EffectFfi"
+        },
+        "id": {
+          "description": "Echo this ID when resolving the operation; never persist or share it.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "effect"
+      ]
+    },
+    "Event": {
+      "description": "Client actions and domain events accepted by the application.",
+      "oneOf": [
+        {
+          "description": "Initialize the client and load host information.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "start"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "description": "Route an action to the bootstrap domain.",
+          "type": "object",
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/Event2"
+            },
+            "type": {
+              "type": "string",
+              "const": "bootstrap"
+            }
+          },
+          "required": [
+            "type",
+            "data"
+          ]
+        }
+      ]
+    },
+    "Event2": {
+      "description": "Actions routed to the bootstrap reducer.",
+      "oneOf": [
+        {
+          "description": "Load the host's client information, or retry a failed load.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "load"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    },
+    "HostInfo": {
+      "description": "Information supplied by the embedding client, not inferred by the core.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Human-readable client name, for example `Idle Web`.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Host application version, independent of the app-core protocol version.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "LoadState": {
+      "description": "Common state for a domain's asynchronously loaded value.",
+      "oneOf": [
+        {
+          "description": "No load has been requested.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "idle"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "description": "An operation is awaiting its host result.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "loading"
+            }
+          },
+          "required": [
+            "status"
+          ]
+        },
+        {
+          "description": "The host supplied the requested value.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "ready"
+            },
+            "value": {
+              "$ref": "#/$defs/HostInfo"
+            }
+          },
+          "required": [
+            "status",
+            "value"
+          ]
+        },
+        {
+          "description": "The host reported a failure; the domain can offer a retry.",
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "const": "failed"
+            },
+            "value": {
+              "$ref": "#/$defs/EffectError"
+            }
+          },
+          "required": [
+            "status",
+            "value"
+          ]
+        }
+      ]
+    },
+    "Result_of_HostInfo_or_EffectError": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Ok": {
+              "$ref": "#/$defs/HostInfo"
+            }
+          },
+          "required": [
+            "Ok"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Err": {
+              "$ref": "#/$defs/EffectError"
+            }
+          },
+          "required": [
+            "Err"
+          ]
+        }
+      ]
+    },
+    "ViewModel": {
+      "description": "The typed presentation state shared by all client surfaces.",
+      "type": "object",
+      "properties": {
+        "bootstrap": {
+          "description": "Loading, error or host information from the bootstrap reducer.",
+          "$ref": "#/$defs/LoadState"
+        },
+        "initialized": {
+          "description": "Whether the client has processed its start event (not host readiness).",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "initialized",
+        "bootstrap"
+      ]
+    }
+  }
+}

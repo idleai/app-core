@@ -28,4 +28,12 @@ jobs:
           workspaces: "app-core -> target"
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked --version 0.20.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install wasm-bindgen
+        run: cargo install wasm-bindgen-cli --locked --version 0.2.127
       - run: bash scripts/check.sh
