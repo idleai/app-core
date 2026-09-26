@@ -1,12 +1,15 @@
 # app-core
 
-The root `Cargo.toml` is a virtual workspace. Application code and examples live
-in `crates/app-core/{src,examples}/`; coordination contracts remain a separate
-workspace package. Run build and check commands from the repository root.
+`app-core` provides Idle's shared application logic. `idle-protocol` defines the
+versioned requests, responses and events exchanged by clients, runtimes and
+services.
 
-Shared application foundations and versioned coordination contracts for Idle.
-Module ownership, current behavior, and build instructions are documented below;
-reserved application modules are intentionally empty.
+Both crates live under `crates/` in a Cargo workspace defined by the root
+`Cargo.toml`. Application code and examples are in `crates/app-core/{src,examples}/`.
+Run build and check commands from the repository root.
+
+Module ownership, current behavior and build instructions follow. Reserved
+application modules are placeholders for planned features.
 
 Owns shared application behavior, never rendering, filesystem capture, inference
 or authorization enforcement. Crux 0.20 is linked through a single bootstrap
