@@ -1,51 +1,38 @@
-//! Minimal Crux linkage; f21 owns the eventual runtime and platform bindings.
+//! A small domain reducer demonstrating host execution without platform I/O.
 
-use crux_core::{
-    App, Command, Request,
-    render::{self, RenderOperation},
+use crate::{
+    effects::{Effect, HostInfo, HostInfoOperation, HostInfoResult},
+    module::{Command, LoadState, Module},
 };
+use crux_core::render;
 use serde::{Deserialize, Serialize};
 
-/// State owned by one client during scaffold initialization.
+/// Private interaction state belonging to the bootstrap module.
 #[derive(Debug, Default)]
 pub struct Model {
-    initialized: bool,
+    state: LoadState<HostInfo>,
 }
 
-/// Client events understood by the scaffold.
+/// Actions routed to the bootstrap reducer.
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum Event {
-    /// Initialize the client and request its first render.
-    Start,
+    /// Load the host's client information, or retry a failed load.
+    Load,
+    /// Internal continuation; shells must return results through the request ID.
+    #[serde(skip)]
+    Completed(HostInfoResult),
 }
 
-/// Requests dispatched from the application to its host.
-#[derive(Debug)]
-pub enum Effect {
-    /// Refresh the host's rendered view.
-    Render(Request<RenderOperation>),
-}
+/// Bootstrap's presentation state, independent of any renderer.
+pub type ViewModel = LoadState<HostInfo>;
 
-impl crux_core::Effect for Effect {}
-
-impl From<Request<RenderOperation>> for Effect {
-    fn from(request: Request<RenderOperation>) -> Self {
-        Self::Render(request)
-    }
-}
-
-/// The typed state a host can present after processing events.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ViewModel {
-    /// Whether the initial client event has been handled.
-    pub initialized: bool,
-}
-
-/// The minimal application used to verify Crux integration.
+/// Reducer for the first host handshake.
 #[derive(Debug, Default)]
-pub struct IdleApp;
+pub struct Bootstrap;
 
-impl App for IdleApp {
+impl Module for Bootstrap {
     type Event = Event;
     type Model = Model;
     type ViewModel = ViewModel;
@@ -53,14 +40,26 @@ impl App for IdleApp {
 
     fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
         match event {
-            Event::Start => model.initialized = true,
+            Event::Load => match model.state {
+                LoadState::Loading | LoadState::Ready(_) => Command::done(),
+                LoadState::Idle | LoadState::Failed(_) => {
+                    model.state = LoadState::Loading;
+                    Command::request_from_shell(HostInfoOperation)
+                        .then_send(Event::Completed)
+                        .and(render::render())
+                }
+            },
+            Event::Completed(result) => {
+                model.state = match result {
+                    Ok(info) => LoadState::Ready(info),
+                    Err(error) => LoadState::Failed(error),
+                };
+                render::render()
+            }
         }
-        render::render()
     }
 
     fn view(&self, model: &Model) -> ViewModel {
-        ViewModel {
-            initialized: model.initialized,
-        }
+        model.state.clone()
     }
 }

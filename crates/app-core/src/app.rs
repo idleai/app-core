@@ -1,0 +1,72 @@
+//! Root composition of domain models, events and views.
+
+use crux_core::{App, Command, render};
+use serde::{Deserialize, Serialize};
+
+use crate::{bootstrap, effects::Effect};
+
+/// State owned by one client, partitioned by domain reducer.
+#[derive(Debug, Default)]
+pub struct Model {
+    initialized: bool,
+    bootstrap: bootstrap::Model,
+}
+
+/// Client actions and domain events accepted by the application.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum Event {
+    /// Initialize the client and load host information.
+    Start,
+    /// Route an action to the bootstrap domain.
+    Bootstrap(bootstrap::Event),
+}
+
+/// The typed presentation state shared by all client surfaces.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ViewModel {
+    /// Whether the client has processed its start event (not host readiness).
+    pub initialized: bool,
+    /// Loading, error or host information from the bootstrap reducer.
+    pub bootstrap: bootstrap::ViewModel,
+}
+
+/// Root reducer composing the shared application's domain modules.
+#[derive(Debug, Default)]
+pub struct IdleApp;
+
+impl App for IdleApp {
+    type Event = Event;
+    type Model = Model;
+    type ViewModel = ViewModel;
+    type Effect = Effect;
+
+    fn update(&self, event: Event, model: &mut Model) -> Command<Effect, Event> {
+        let event = match event {
+            Event::Start => {
+                if model.initialized {
+                    return Command::done();
+                }
+                model.initialized = true;
+                // Starting after an explicit module load must still render this change.
+                return bootstrap::Bootstrap
+                    .update(bootstrap::Event::Load, &mut model.bootstrap)
+                    .map_event(Event::Bootstrap)
+                    .and(render::render());
+            }
+            Event::Bootstrap(event) => event,
+        };
+        bootstrap::Bootstrap
+            .update(event, &mut model.bootstrap)
+            .map_event(Event::Bootstrap)
+    }
+
+    fn view(&self, model: &Model) -> ViewModel {
+        ViewModel {
+            initialized: model.initialized,
+            bootstrap: bootstrap::Bootstrap.view(&model.bootstrap),
+        }
+    }
+}
