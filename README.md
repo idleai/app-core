@@ -4,8 +4,9 @@ The root `Cargo.toml` is a virtual workspace. Application code and examples live
 in `crates/app-core/{src,examples}/`; coordination contracts remain a separate
 workspace package. Run build and check commands from the repository root.
 
-Initial scaffold for Idle. Module ownership, current behavior, and build
-instructions are documented below; reserved modules are intentionally empty.
+Shared application foundations and versioned coordination contracts for Idle.
+Module ownership, current behavior, and build instructions are documented below;
+reserved application modules are intentionally empty.
 
 Owns shared application behavior, never rendering, filesystem capture, inference
 or authorization enforcement. Crux 0.20 is linked through a single bootstrap
@@ -38,7 +39,7 @@ No sibling repository is required to build this repository.
 | Boundary | Owner after f1 |
 | --- | --- |
 | Root manifest, exports, bootstrap/runtime and bindings | f21/crux-runtime |
-| `crates/coordination-contracts`, its manifest, exports and future schemas | f20/coordination-contracts |
+| `crates/idle-protocol`, its manifest, exports and schemas | f20/coordination-contracts |
 | `crates/app-core/src/workspace.rs` | f22/workspace-state |
 | `crates/app-core/src/history.rs` | f23/history-state |
 | `crates/app-core/src/sessions.rs` | f24/session-state |
@@ -47,9 +48,20 @@ No sibling repository is required to build this repository.
 | `crates/app-core/src/configuration.rs` | f27/settings-rules-state |
 | `crates/app-core/src/subscriptions.rs` | f28/subscription-state |
 
-The coordination crate lets runtimes and coordination adapters consume shared
-contracts without depending on the Crux application model. Its wire schemas and
-coordination behavior are reserved for later feature work.
+The [idle-protocol crate](crates/idle-protocol/README.md) publishes the
+`idle_protocol::v1` Rust API and a checked-in
+[v1 JSON Schema](crates/idle-protocol/schemas/v1.json). Runtimes and
+standalone/managed coordination adapters can consume membership, session, resource,
+grant, Control lease and recovery contracts without depending on Crux.
+Authenticated contributor attribution and retry identities are shared; coordination
+receipt remains separate from runtime acceptance, input order and completion.
+Service implementations and runtime enforcement remain with their consumers.
+
+`idle-protocol` is an independent package in this Cargo workspace. Applications,
+runtimes and managed coordination providers depend directly on it; importing it
+does not import the `app-core` application crate. The public protocol and OSS
+stack must remain independent of private backend source. EditChain remains the
+history engine; workspace coordination contracts are owned here.
 
 Reuse semantic state from EditChain's
 `crates/editchain-history-renderer/src/app/`, viewer portions of
