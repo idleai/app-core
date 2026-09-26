@@ -1,7 +1,15 @@
 # app-core
 
-Initial scaffold for Idle. Module ownership, current behavior, and build
-instructions are documented below; reserved modules are intentionally empty.
+`app-core` provides Idle's shared application logic. `idle-protocol` defines the
+versioned requests, responses and events exchanged by clients, runtimes and
+services.
+
+Both crates live under `crates/` in a Cargo workspace defined by the root
+`Cargo.toml`. Application code and examples are in `crates/app-core/{src,examples}/`.
+Run build and check commands from the repository root.
+
+Module ownership, current behavior and build instructions follow. Reserved
+application modules are placeholders for planned features.
 
 Owns shared application behavior, never rendering, filesystem capture, inference
 or authorization enforcement. Crux 0.20 is linked through a single bootstrap
@@ -25,7 +33,7 @@ Rust, Clippy and Rustdoc rules and its thresholds in `clippy.toml`.
 
 ```sh
 bash scripts/check.sh
-cargo run --locked --example bootstrap
+cargo run --locked -p app-core --example bootstrap
 cargo build --workspace --locked --target wasm32-unknown-unknown
 ```
 
@@ -34,18 +42,29 @@ No sibling repository is required to build this repository.
 | Boundary | Owner after f1 |
 | --- | --- |
 | Root manifest, exports, bootstrap/runtime and bindings | f21/crux-runtime |
-| `crates/coordination-contracts`, its manifest, exports and future schemas | f20/coordination-contracts |
-| `src/workspace.rs` | f22/workspace-state |
-| `src/history.rs` | f23/history-state |
-| `src/sessions.rs` | f24/session-state |
-| `src/projections.rs` | f25/projection-state |
-| `src/resources.rs` | f26/resource-state |
-| `src/configuration.rs` | f27/settings-rules-state |
-| `src/subscriptions.rs` | f28/subscription-state |
+| `crates/idle-protocol`, its manifest, exports and schemas | f20/coordination-contracts |
+| `crates/app-core/src/workspace.rs` | f22/workspace-state |
+| `crates/app-core/src/history.rs` | f23/history-state |
+| `crates/app-core/src/sessions.rs` | f24/session-state |
+| `crates/app-core/src/projections.rs` | f25/projection-state |
+| `crates/app-core/src/resources.rs` | f26/resource-state |
+| `crates/app-core/src/configuration.rs` | f27/settings-rules-state |
+| `crates/app-core/src/subscriptions.rs` | f28/subscription-state |
 
-The coordination crate lets runtimes and coordination adapters consume shared
-contracts without depending on the Crux application model. Its wire schemas and
-coordination behavior are reserved for later feature work.
+The [idle-protocol crate](crates/idle-protocol/README.md) publishes the
+`idle_protocol::v1` Rust API and a checked-in
+[v1 JSON Schema](crates/idle-protocol/schemas/v1.json). Runtimes and
+standalone/managed coordination adapters can consume membership, session, resource,
+grant, Control lease and recovery contracts without depending on Crux.
+Authenticated contributor attribution and retry identities are shared; coordination
+receipt remains separate from runtime acceptance, input order and completion.
+Service implementations and runtime enforcement remain with their consumers.
+
+`idle-protocol` is an independent package in this Cargo workspace. Applications,
+runtimes and managed coordination providers depend directly on it; importing it
+does not import the `app-core` application crate. The public protocol and OSS
+stack must remain independent of private backend source. EditChain remains the
+history engine; workspace coordination contracts are owned here.
 
 Reuse semantic state from EditChain's
 `crates/editchain-history-renderer/src/app/`, viewer portions of

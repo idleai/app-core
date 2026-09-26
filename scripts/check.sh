@@ -4,4 +4,4 @@ cd "$(dirname "$0")/.."
 bash scripts/lint.sh
 cargo build --workspace --locked
 cargo build --workspace --locked --target wasm32-unknown-unknown
-cargo run --locked --example bootstrap
+cargo run --locked -p app-core --example bootstrap
