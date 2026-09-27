@@ -6,5 +6,5 @@ cargo build --workspace --locked
 cargo build --workspace --locked --target wasm32-unknown-unknown
 cargo run --locked -p app-core --example bootstrap
 bash scripts/build-bindings.sh
-python3 scripts/smoke-native.py
-node scripts/smoke-wasm.cjs
+swift run --package-path dist/native SwiftSmoke
+bash scripts/smoke-kotlin.sh

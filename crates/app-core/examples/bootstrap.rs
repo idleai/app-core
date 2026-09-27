@@ -6,11 +6,12 @@ use std::{
 };
 
 use app_core::{Core, Effect, Event, effects::HostInfo, module::LoadState};
+use bincode as _;
 use crux_core as _;
-#[cfg(feature = "schema")]
-use schemars as _;
+use facet as _;
+#[cfg(feature = "typegen")]
+use facet_generate as _;
 use serde as _;
-use serde_json as _;
 use thiserror as _;
 
 fn main() -> Result<(), Box<dyn Error>> {

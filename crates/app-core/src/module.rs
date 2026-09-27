@@ -8,7 +8,8 @@
 //!
 //! Add domain state and view fields in the root composition, add an event variant,
 //! and register new operations in [`crate::effects`]. A completion event should
-//! use `#[serde(skip)]` so serialized client actions cannot forge effect results.
+//! use `#[serde(skip)]` and `#[facet(skip)]` so serialized client actions cannot
+//! forge effect results and generated host types expose only client actions.
 //! Subscriptions and context-specific reconciliation belong to their domain;
 //! request IDs at the shell boundary only correlate in-flight effect continuations.
 
@@ -20,18 +21,20 @@ pub use crux_core::App as Module;
 pub use crux_core::Command;
 
 /// A host-reported operation failure suitable for presentation.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[serde(deny_unknown_fields)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
+)]
 pub struct EffectError {
     /// A host-supplied explanation, without credentials or private diagnostics.
     pub message: String,
 }
 
 /// Common state for a domain's asynchronously loaded value.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "status", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[repr(u8)]
 pub enum LoadState<T> {
     /// No load has been requested.
     #[default]

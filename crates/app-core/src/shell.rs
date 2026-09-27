@@ -1,19 +1,54 @@
-//! Versioned JSON boundary shared by native and WASM bindings.
+//! Versioned binary boundary for foreign-language hosts.
 
 use std::{collections::BTreeMap, fmt, sync::Mutex};
 
-use crux_core::bridge::{Bridge, BridgeError, EffectId, JsonFfiFormat};
+use bincode::Options;
+use crux_core::bridge::{BincodeFfiFormat, Bridge, BridgeError, EffectId, FfiFormat};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{Core, IdleApp, effects::EffectFfi};
 
 /// Version of the app-core shell protocol (independent of coordination APIs).
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
+
+/// Crux's fixed-width, little-endian bincode format, rejecting trailing input.
+#[derive(Debug)]
+pub struct ShellFormat;
+
+impl FfiFormat for ShellFormat {
+    type Error = bincode::Error;
+
+    fn serialize<T: Serialize>(buffer: &mut Vec<u8>, value: &T) -> Result<(), Self::Error> {
+        BincodeFfiFormat::serialize(buffer, value)
+    }
+
+    fn deserialize<'de, T: Deserialize<'de>>(bytes: &'de [u8]) -> Result<T, Self::Error> {
+        bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .reject_trailing_bytes()
+            .deserialize(bytes)
+    }
+}
+
+/// Effect batch returned to hosts, with generated deserializers.
+/// Its single sequence field matches Crux's serialized request vector.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
+)]
+pub struct EffectBatch {
+    /// Effects to execute, including render notifications.
+    pub requests: Vec<EffectRequest>,
+}
 
 /// Serializable effect request; IDs are local to one live shell instance.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
+)]
 pub struct EffectRequest {
     /// Echo this ID when resolving the operation; never persist or share it.
     pub id: u32,
@@ -24,18 +59,18 @@ pub struct EffectRequest {
 /// Errors at the shell boundary, distinct from an operation's domain error.
 #[derive(Debug, Error)]
 pub enum ShellError {
-    /// JSON did not match an operation result; the request remains pending.
+    /// Bytes did not match an operation result; the request remains pending.
     #[error("invalid host response: {0}")]
-    InvalidResponse(serde_json::Error),
+    InvalidResponse(bincode::Error),
     /// The ID is unknown, already completed, or belongs to a notification.
     #[error("no pending operation for request {0}")]
     UnknownRequest(u32),
     /// The core produced an invalid effect batch.
     #[error("invalid core effect batch: {0}")]
-    InvalidRequests(serde_json::Error),
+    InvalidRequests(bincode::Error),
     /// Crux rejected an event, response ID or serialization operation.
     #[error(transparent)]
-    Bridge(#[from] BridgeError<JsonFfiFormat>),
+    Bridge(#[from] BridgeError<ShellFormat>),
     /// A prior panic poisoned this instance; create a new shell.
     #[error("the shell lock was poisoned")]
     Poisoned,
@@ -51,7 +86,7 @@ pub struct Shell {
 }
 
 struct ShellState {
-    bridge: Bridge<IdleApp, JsonFfiFormat>,
+    bridge: Bridge<IdleApp, ShellFormat>,
     // Crux owns continuations and IDs. This table only remembers each pending
     // operation's wire type so validation happens before a callback is consumed.
     pending: BTreeMap<u32, EffectFfi>,
@@ -59,10 +94,11 @@ struct ShellState {
 
 impl ShellState {
     fn register(&mut self, bytes: &[u8]) -> Result<(), ShellError> {
-        let requests: Vec<EffectRequest> =
-            serde_json::from_slice(bytes).map_err(ShellError::InvalidRequests)?;
+        let batch: EffectBatch =
+            ShellFormat::deserialize(bytes).map_err(ShellError::InvalidRequests)?;
         self.pending.extend(
-            requests
+            batch
+                .requests
                 .into_iter()
                 .filter(|request| request.effect.expects_response())
                 .map(|request| (request.id, request.effect)),
@@ -95,7 +131,7 @@ impl Shell {
         }
     }
 
-    /// Process UTF-8 JSON for a client event and return JSON effect requests.
+    /// Process a bincode client event and return an encoded [`EffectBatch`].
     ///
     /// # Errors
     /// Returns an error for malformed or internal-only events, or a poisoned core.
@@ -110,7 +146,7 @@ impl Shell {
         Ok(output)
     }
 
-    /// Resolve one request with its JSON result and return any follow-up effects.
+    /// Resolve a bincode result and return an encoded follow-up [`EffectBatch`].
     ///
     /// # Errors
     /// Rejects malformed results, unknown, completed or notification-only IDs,
@@ -136,7 +172,7 @@ impl Shell {
         Ok(output)
     }
 
-    /// Read the typed view model as UTF-8 JSON.
+    /// Read the typed view model as bincode bytes.
     ///
     /// # Errors
     /// Returns an error if serialization fails or the instance was poisoned.
@@ -149,18 +185,4 @@ impl Shell {
         state.bridge.view(&mut output)?;
         Ok(output)
     }
-}
-
-/// Schema entrypoint grouping the four wire payload types, not a wire envelope.
-#[cfg(feature = "schema")]
-#[derive(Debug, schemars::JsonSchema)]
-pub struct ShellContract {
-    /// Client actions accepted by `process_event`.
-    pub event: crate::Event,
-    /// Effect batches returned by event and response calls.
-    pub requests: Vec<EffectRequest>,
-    /// Output expected for a host information request.
-    pub host_info_result: crate::effects::HostInfoResult,
-    /// Presentation state returned by `view`.
-    pub view: crate::ViewModel,
 }
