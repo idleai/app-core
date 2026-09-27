@@ -1,5 +1,9 @@
 //! Shared application behavior. Hosts execute effects; renderers consume views.
-//! See [`module`] for reducer composition and [`Shell`] for the JSON host boundary.
+//! See [`module`] for reducer composition and [`Shell`] for the binary host boundary.
+
+// This optional dependency is used by the codegen binary.
+#[cfg(feature = "typegen")]
+use facet_generate as _;
 
 mod app;
 pub mod bootstrap;

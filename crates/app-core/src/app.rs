@@ -13,9 +13,8 @@ pub struct Model {
 }
 
 /// Client actions and domain events accepted by the application.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Serialize, facet::Facet)]
+#[repr(u8)]
 pub enum Event {
     /// Initialize the client and load host information.
     Start,
@@ -24,8 +23,11 @@ pub enum Event {
 }
 
 /// The typed presentation state shared by all client surfaces.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
+)]
 pub struct ViewModel {
     /// Whether the client has processed its start event (not host readiness).
     pub initialized: bool,

@@ -14,14 +14,15 @@ pub struct Model {
 }
 
 /// Actions routed to the bootstrap reducer.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Serialize, facet::Facet)]
+#[facet(rename = "BootstrapEvent")]
+#[repr(u8)]
 pub enum Event {
     /// Load the host's client information, or retry a failed load.
     Load,
     /// Internal continuation; shells must return results through the request ID.
     #[serde(skip)]
+    #[facet(skip)]
     Completed(HostInfoResult),
 }
 

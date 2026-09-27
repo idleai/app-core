@@ -2,13 +2,15 @@ use crate::{
     Core, Effect, Event, Shell, ShellError, ViewModel, bootstrap,
     effects::{EffectFfi, HostInfo, HostInfoOperation},
     module::{EffectError, LoadState},
-    shell::EffectRequest,
+    shell::{EffectRequest, ShellFormat},
 };
 
-const START: &[u8] = br#"{"type":"start"}"#;
-const RETRY: &[u8] = br#"{"type":"bootstrap","data":{"type":"load"}}"#;
-const SUCCESS: &[u8] = br#"{"Ok":{"name":"Test host","version":"1.0"}}"#;
-const FAILURE: &[u8] = br#"{"Err":{"message":"Host unavailable"}}"#;
+use crux_core::bridge::FfiFormat;
+
+const START: &[u8] = b"\0\0\0\0";
+const RETRY: &[u8] = b"\x01\0\0\0\0\0\0\0";
+const SUCCESS: &[u8] = b"\0\0\0\0\x09\0\0\0\0\0\0\0Test host\x03\0\0\0\0\0\0\x001.0";
+const FAILURE: &[u8] = b"\x01\0\0\0\x10\0\0\0\0\0\0\0Host unavailable";
 
 fn host_info() -> HostInfo {
     HostInfo {
@@ -31,7 +33,7 @@ fn host_request(effects: Vec<Effect>) -> crux_core::Request<HostInfoOperation> {
 }
 
 fn requests(bytes: &[u8]) -> Vec<EffectRequest> {
-    serde_json::from_slice(bytes).expect("a valid request batch")
+    ShellFormat::deserialize(bytes).expect("a valid request batch")
 }
 
 fn request_id(requests: &[EffectRequest]) -> u32 {
@@ -43,7 +45,7 @@ fn request_id(requests: &[EffectRequest]) -> u32 {
 }
 
 fn view(shell: &Shell) -> ViewModel {
-    serde_json::from_slice(&shell.view().expect("view bytes")).expect("typed view")
+    ShellFormat::deserialize(&shell.view().expect("view bytes")).expect("typed view")
 }
 
 #[test]
@@ -158,12 +160,12 @@ fn module_actions_can_precede_start_without_losing_initialization_render() {
 }
 
 #[test]
-fn json_shell_round_trip_matches_the_rust_view() {
+fn binary_shell_round_trip_matches_the_rust_view() {
     let shell = Shell::new();
     assert_eq!(
         view(&shell),
         ViewModel::default(),
-        "the JSON view matches Rust defaults"
+        "the binary view matches Rust defaults"
     );
     let effects = requests(&shell.process_event(START).expect("start event"));
     assert_eq!(
@@ -196,12 +198,20 @@ fn json_shell_round_trip_matches_the_rust_view() {
 fn malformed_events_and_forged_completions_leave_state_unchanged() {
     let shell = Shell::new();
     for event in [
-        b"not JSON".as_slice(),
-        br#"{"type":"unknown"}"#,
-        br#"{"type":"bootstrap","data":{"type":"completed","data":{"Ok":{"name":"Forged","version":"0"}}}}"#,
+        b"legacy JSON".as_slice(),
+        b"\xff\xff\xff\xff",
+        b"\x01\0\0\0\x01\0\0\0", // Internal Completed variant.
+        b"\0\0\0\0\x01",         // Trailing bytes after Start.
     ] {
-        assert!(shell.process_event(event).is_err(), "invalid client input must be rejected");
-        assert_eq!(view(&shell), ViewModel::default(), "rejected input must not change state");
+        assert!(
+            shell.process_event(event).is_err(),
+            "invalid client input must be rejected"
+        );
+        assert_eq!(
+            view(&shell),
+            ViewModel::default(),
+            "rejected input must not change state"
+        );
     }
 }
 
@@ -211,9 +221,9 @@ fn malformed_results_can_be_corrected_without_losing_the_request() {
     let effects = requests(&shell.process_event(START).expect("start event"));
     let id = request_id(&effects);
     for response in [
-        b"bad JSON".as_slice(),
-        br#"{"Ok":{"name":"Incomplete"}}"#,
-        br#"{"Err":{}}"#,
+        b"bad bytes".as_slice(),
+        b"\0\0\0\0",   // Ok without HostInfo.
+        b"\x01\0\0\0", // Err without EffectError.
     ] {
         assert!(
             matches!(
@@ -354,15 +364,55 @@ fn concurrent_native_calls_issue_one_bootstrap_operation() {
     );
 }
 
-#[cfg(feature = "schema")]
 #[test]
-fn checked_in_shell_schema_matches_the_public_types() {
-    let expected: serde_json::Value =
-        serde_json::from_str(include_str!("../schemas/shell-v1.json")).expect("checked-in schema");
-    let actual = serde_json::to_value(schemars::schema_for!(crate::shell::ShellContract))
-        .expect("generated schema");
+fn protocol_v2_binary_layout_matches_the_public_types() {
+    use crate::effects::{HostInfoResponse, HostInfoResult};
+    use crate::shell::{EffectBatch, PROTOCOL_VERSION};
+
+    fn encode(value: &impl serde::Serialize) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        ShellFormat::serialize(&mut bytes, value).expect("encode payload");
+        bytes
+    }
+
+    assert_eq!(PROTOCOL_VERSION, 2, "binary protocol replaces JSON v1");
+    assert_eq!(encode(&Event::Start), START, "stable Start discriminant");
     assert_eq!(
-        actual, expected,
-        "regenerate the shell schema when changing public types"
+        encode(&Event::Bootstrap(bootstrap::Event::Load)),
+        RETRY,
+        "stable nested client event"
+    );
+    for (result, expected) in [
+        (Ok(host_info()), SUCCESS),
+        (
+            Err(EffectError {
+                message: "Host unavailable".into(),
+            }),
+            FAILURE,
+        ),
+    ] {
+        assert_eq!(encode(&result), expected, "stable host result encoding");
+        let response = HostInfoResponse::from(result.clone());
+        assert_eq!(
+            encode(&response),
+            expected,
+            "generated result wrapper matches Crux"
+        );
+        let decoded: HostInfoResult = ShellFormat::deserialize(expected).expect("decode result");
+        assert_eq!(decoded, result, "host result decodes without loss");
+    }
+    assert_eq!(encode(&ViewModel::default()), [0; 5], "stable initial view");
+    let shell = Shell::new();
+    let bytes = shell.process_event(START).expect("start");
+    let batch: EffectBatch = ShellFormat::deserialize(&bytes).expect("typed batch");
+    assert_eq!(
+        encode(&batch),
+        bytes,
+        "generated batch wrapper matches Crux"
+    );
+    assert_eq!(
+        encode(&batch.requests),
+        bytes,
+        "Crux serializes a request vector"
     );
 }
