@@ -8,6 +8,7 @@ use crux_core::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
 
 /// Information supplied by the embedding client, not inferred by the core.
@@ -62,6 +63,8 @@ pub enum Effect {
     Render(Request<RenderOperation>),
     /// Execute the host information operation and return its typed result.
     HostInfo(Request<HostInfoOperation>),
+    /// Execute a chain-scoped history query or platform history action.
+    History(Box<Request<Query>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -78,29 +81,41 @@ impl From<Request<HostInfoOperation>> for Effect {
     }
 }
 
+impl From<Request<Query>> for Effect {
+    fn from(request: Request<Query>) -> Self {
+        Self::History(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
 pub enum EffectFfi {
     /// A notification; call `view`, and do not return a response for this ID.
     Render,
     /// Return a [`HostInfoResult`] for this request ID.
     HostInfo,
+    /// Return a history query result for this request ID.
+    History(Box<Query>),
 }
 
 impl EffectFfi {
-    pub(crate) const fn expects_response(self) -> bool {
+    pub(crate) const fn expects_response(&self) -> bool {
         match self {
             Self::Render => false,
-            Self::HostInfo => true,
+            Self::HostInfo | Self::History(_) => true,
         }
     }
 
-    pub(crate) fn validate_response(self, bytes: &[u8]) -> Result<(), bincode::Error> {
+    pub(crate) fn validate_response(&self, bytes: &[u8]) -> Result<(), bincode::Error> {
         match self {
             Self::Render => Ok(()),
             Self::HostInfo => {
                 let _result: HostInfoResult = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
+            Self::History(_) => {
+                let _result: QueryOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
         }
@@ -114,6 +129,9 @@ impl EffectFFI for Effect {
         match self {
             Self::Render(request) => request.serialize(|_| EffectFfi::Render),
             Self::HostInfo(request) => request.serialize(|_| EffectFfi::HostInfo),
+            Self::History(request) => {
+                request.serialize(|query| EffectFfi::History(Box::new(query)))
+            }
         }
     }
 }

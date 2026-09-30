@@ -9,6 +9,11 @@ import ai.idle.appcore.types.EffectRequest
 import ai.idle.appcore.types.Event
 import ai.idle.appcore.types.HostInfo
 import ai.idle.appcore.types.HostInfoResponse
+import ai.idle.appcore.types.HistoryEvent
+import ai.idle.appcore.types.HistoryPage
+import ai.idle.appcore.types.QueryResponse
+import ai.idle.appcore.types.QueryResult
+import ai.idle.appcore.types.RequestState
 import ai.idle.appcore.types.LoadState
 import ai.idle.appcore.types.ViewModel
 
@@ -33,8 +38,9 @@ private fun rejected(action: () -> Unit) {
 }
 
 private fun exercise(core: AppCore, other: AppCore) {
-    val idle = ViewModel(initialized = false, bootstrap = LoadState.Idle)
-    check(core.protocolVersion() == 2u)
+    val idle = view(core)
+    check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
+    check(core.protocolVersion() == 3u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -43,9 +49,9 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.processEvent(byteArrayOf(1, 0, 0, 0, 1, 0, 0, 0)) }
 
     val effects = send(core, Event.Start)
-    val id = effects.request(EffectFfi.HOSTINFO)
-    val renderId = effects.first { it.effect == EffectFfi.RENDER }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading))
+    val id = effects.request(EffectFfi.HostInfo)
+    val renderId = effects.first { it.effect == EffectFfi.Render }.id
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -54,22 +60,30 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(UInt.MAX_VALUE, success) }
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
-    check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.RENDER))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info)))
+    check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
-    val failedId = send(other, Event.Start).request(EffectFfi.HOSTINFO)
+    val failedId = send(other, Event.Start).request(EffectFfi.HostInfo)
     val failure = EffectError(message = "Host unavailable 🌍")
     val failureBytes = HostInfoResponse.Err(failure).bincodeSerialize()
-    check(respond(other, failedId, failureBytes).map { it.effect } == listOf(EffectFfi.RENDER))
+    check(respond(other, failedId, failureBytes).map { it.effect } == listOf(EffectFfi.Render))
     check(view(other).bootstrap == LoadState.Failed(failure))
-    val retryId = send(other, Event.Bootstrap(BootstrapEvent.LOAD)).request(EffectFfi.HOSTINFO)
+    val retryId = send(other, Event.Bootstrap(BootstrapEvent.LOAD)).request(EffectFfi.HostInfo)
     check(retryId != failedId)
     rejected { other.handleResponse(failedId, success) }
-    check(respond(other, retryId, success).map { it.effect } == listOf(EffectFfi.RENDER))
+    check(respond(other, retryId, success).map { it.effect } == listOf(EffectFfi.Render))
     check(view(other).bootstrap == LoadState.Ready(info))
     check(view(core).bootstrap == LoadState.Ready(info))
+    val history = send(core, Event.History(HistoryEvent.Connect("chain"))).single { it.effect is EffectFfi.History }
+    check((history.effect as EffectFfi.History).value.chain == "chain")
+    check(view(core).history.paging.state == RequestState.Loading)
+    val page = QueryResponse.Ok(QueryResult.History(HistoryPage(observations = emptyList(), nextAfter = null, scanned = 0u)))
+    respond(core, history.id, page.bincodeSerialize())
+    check(view(core).history.paging.state == RequestState.Ready)
+    check(view(core).history.paging.exhausted)
+    check(view(other).history.chain == null)
 }
 
 fun main() {

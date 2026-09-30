@@ -33,8 +33,9 @@ func request(_ effects: [EffectRequest], _ kind: EffectFfi) throws -> UInt32 {
 
 let core = AppCore()
 let other = AppCore()
-let idle = ViewModel(initialized: false, bootstrap: .idle)
-check(core.protocolVersion() == 2)
+let idle = try view(core)
+check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
+check(core.protocolVersion() == 3)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -54,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info)))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 
@@ -69,3 +70,16 @@ try rejected { _ = try other.handleResponse(id: failedID, response: success) }
 _ = try other.handleResponse(id: retryID, response: success)
 check(try view(other).bootstrap == .ready(info))
 print("Swift + BoltFFI + Facet: event -> effect -> result -> typed view PASS")
+
+let historyEffects = try send(core, .history(.connect("chain")))
+guard let historyRequest = historyEffects.first(where: {
+    if case .history = $0.effect { return true }; return false
+}) else { throw SmokeError.missingEffect }
+if case .history(let query) = historyRequest.effect { check(query.chain == "chain") }
+check(try view(core).history.paging.state == .loading)
+let historyResponse = QueryResponse.ok(.history(HistoryPage(observations: [], nextAfter: nil, scanned: 0)))
+_ = try core.handleResponse(id: historyRequest.id, response: Data(historyResponse.bincodeSerialize()))
+check(try view(core).history.paging.state == .ready)
+check(try view(core).history.paging.exhausted)
+check(try view(other).history.chain == nil)
+print("Swift history event -> engine-query effect -> typed page PASS")

@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `2`; this replaces the old JSON protocol. |
+| `protocol_version()` | Returns `3`; includes semantic history payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse` or `QueryResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -57,6 +57,14 @@ effects, view model, `update` and `view`.
 3. Return commands and request a render when the view changes. Mark internal
    completion events with both `#[serde(skip)]` and `#[facet(skip)]`.
    Test success and failure, then regenerate the host bindings.
+
+Use distinct Rust names for reflected domain event enums, then re-export them as
+`Event` if desired. Facet 0.19's registry can conflate multiple nested enums named
+`Event` despite rename attributes. The history module uses `HistoryEvent` and
+verifies the generated event/result codecs in both native smoke tests.
+
+See [history integration](history.md) for engine query execution and evidence
+models. Rust hosts resolve boxed history requests with `request.as_mut()`.
 
 This foundation handles one-shot effects and render notifications. Subscription
 and reconnect behavior belong to later domain work.

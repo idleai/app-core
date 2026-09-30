@@ -22,8 +22,16 @@ interface, binary shell protocol, and extension points. BoltFFI generates the
 native method bindings. Facet generates Swift and Kotlin payload types and bincode
 codecs. The shell exposes `process_event`,
 `handle_response`, `view`, and `protocol_version` (camelCase in generated hosts).
-Protocol **2** replaces the earlier JSON protocol; hosts must regenerate their
-bindings and use the generated codecs.
+Protocol **3** adds semantic history events, query effects and view models. Hosts
+must regenerate their bindings and use the generated codecs.
+
+The [history integration guide](docs/history.md) covers stable selection, literal
+search, filters, disclosure, paging, cached evidence and immutable content replay.
+Rust native hosts can execute its effects through `history::engine::execute`;
+WASM hosts use the same portable requests through their own engine connection.
+`idle-history` holds the small portable contracts still consumed by the legacy
+EditChain viewer during its migration. Graph geometry, scrolling and rendering
+remain client responsibilities.
 
 Rust 1.97.0 is selected by `rust-toolchain.toml`. Cargo installs the specified
 toolchain/targets on first use; lockfiles are tracked. Install the binding
@@ -75,14 +83,16 @@ cargo run --locked -p app-core --example bootstrap
 cargo build --workspace --locked --target wasm32-unknown-unknown
 ```
 
-No sibling repository is required to build this repository.
+Check out `idleai/editchain` beside this repository as `../editchain`. Local path
+dependencies use its core schema and engine queries; CI recreates the same layout.
+The engine host adapter is native-only; WASM compiles the schema and pure reducer.
 
 | Boundary | Owner after f1 |
 | --- | --- |
 | Root manifest, exports, bootstrap/runtime, `app-core-bindings` and shell payload types | f21/crux-runtime |
 | `crates/idle-protocol`, its manifest, exports and schemas | f20/coordination-contracts |
 | `crates/app-core/src/workspace.rs` | f22/workspace-state |
-| `crates/app-core/src/history.rs` | f23/history-state |
+| `crates/app-core/src/history{.rs,/}`, `crates/idle-history` | f23/history-state |
 | `crates/app-core/src/sessions.rs` | f24/session-state |
 | `crates/app-core/src/projections.rs` | f25/projection-state |
 | `crates/app-core/src/resources.rs` | f26/resource-state |
@@ -104,11 +114,12 @@ does not import the `app-core` application crate. The public protocol and OSS
 stack must remain independent of private backend source. EditChain remains the
 history engine; workspace coordination contracts are owned here.
 
-Reuse semantic state from EditChain's
-`crates/editchain-history-renderer/src/app/`, viewer portions of
-`editchain-node/src/history/` and `editchain-protocol/src/`, and extension sharing
-flows during their named feature sessions. Keep DOM plans, pixel geometry and
-native bridges with their owners. f1 copies none of those implementations.
+History state adapts the selection, find, cache and disclosure behavior from
+EditChain's `editchain-history-renderer::app`. The old renderer delegates semantic
+selection to `idle-history`; node/protocol preview adapters also use that package.
+The old viewer's coordinate-based caches, disclosure and find adapters remain
+until the graph/detail consumers switch. Subscription/reconnect and extension
+sharing flows remain with their named feature owners.
 
 The dependency policy in `deny.toml` includes one explicit maintenance exception:
 [RUSTSEC-2025-0141](https://rustsec.org/advisories/RUSTSEC-2025-0141.html), for
@@ -116,9 +127,9 @@ Crux 0.20's mandatory `bincode` 1.3.3 dependency. Remove it when Crux migrates
 serialization. Other advisories remain checked. Crux's optional macro feature
 is disabled, removing its unmaintained `proc-macro-error` dependency.
 
-Scaffold consumers must handle the new `Effect::HostInfo` operation and include
-`bootstrap` when constructing a `ViewModel` literal (or use `..Default::default()`).
+Consumers handle `Effect::HostInfo` and boxed `Effect::History` requests, and include
+`bootstrap` and `history` in `ViewModel` literals (or use `..Default::default()`).
 `initialized` still means the start event was processed; readiness is represented
 by `view.bootstrap`. Linkable native artifacts come from `app-core-bindings`,
 while `app-core` is the Rust library used by native and WASM clients. Domain modules
-reserved for f22–f28 remain with their feature owners.
+reserved for f22 and f24–f28 remain with their feature owners.

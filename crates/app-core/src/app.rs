@@ -3,13 +3,14 @@
 use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
-use crate::{bootstrap, effects::Effect};
+use crate::{bootstrap, effects::Effect, history};
 
 /// State owned by one client, partitioned by domain reducer.
 #[derive(Debug, Default)]
 pub struct Model {
     initialized: bool,
     bootstrap: bootstrap::Model,
+    history: history::Model,
 }
 
 /// Client actions and domain events accepted by the application.
@@ -20,6 +21,8 @@ pub enum Event {
     Start,
     /// Route an action to the bootstrap domain.
     Bootstrap(bootstrap::Event),
+    /// Route a semantic history action.
+    History(history::Event),
 }
 
 /// The typed presentation state shared by all client surfaces.
@@ -33,6 +36,8 @@ pub struct ViewModel {
     pub initialized: bool,
     /// Loading, error or host information from the bootstrap reducer.
     pub bootstrap: bootstrap::ViewModel,
+    /// Shared history interaction and exact evidence state.
+    pub history: history::ViewModel,
 }
 
 /// Root reducer composing the shared application's domain modules.
@@ -59,6 +64,11 @@ impl App for IdleApp {
                     .and(render::render());
             }
             Event::Bootstrap(event) => event,
+            Event::History(event) => {
+                return history::History
+                    .update(event, &mut model.history)
+                    .map_event(Event::History);
+            }
         };
         bootstrap::Bootstrap
             .update(event, &mut model.bootstrap)
@@ -69,6 +79,7 @@ impl App for IdleApp {
         ViewModel {
             initialized: model.initialized,
             bootstrap: bootstrap::Bootstrap.view(&model.bootstrap),
+            history: history::History.view(&model.history),
         }
     }
 }
