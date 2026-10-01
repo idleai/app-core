@@ -33,7 +33,7 @@ pub enum HistoryEvent {
     SearchMore,
     /// Move the match cursor with wrapping, selecting the stable destination.
     NavigateMatch(i32),
-    /// Select a logical object and optionally one of its recorded operations.
+    /// Select an item or observation, resolving an omitted item when known.
     Select(Selected),
     /// Clear selection without discarding cached observations.
     ClearSelection,
@@ -409,7 +409,7 @@ fn refresh(model: &mut Model) -> HistoryCommand {
     request(model, QueryAction::Reconcile(Box::new(snapshot)))
 }
 
-fn select(model: &mut Model, selected: Selected) -> HistoryCommand {
+fn select(model: &mut Model, mut selected: Selected) -> HistoryCommand {
     if selected
         .item
         .as_deref()
@@ -421,11 +421,18 @@ fn select(model: &mut Model, selected: Selected) -> HistoryCommand {
     {
         return Command::done();
     }
+    let observation_only = selected.item.is_none();
     if let Some(operation) = &selected.observation
         && let Some(item) = model.cache.item_for_observation(operation)
-        && selected.item.as_ref() != Some(&item)
     {
-        return Command::done();
+        if selected
+            .item
+            .as_ref()
+            .is_some_and(|selected| *selected != item)
+        {
+            return Command::done();
+        }
+        selected.item = Some(item);
     }
     model.selected = selected;
     let mut command = render::render();
@@ -435,7 +442,7 @@ fn select(model: &mut Model, selected: Selected) -> HistoryCommand {
         command = command.and(load_item(model, item));
     }
     if let Some(operation) = model.selected.observation.clone() {
-        command = command.and(load_operation_details(model, operation, false));
+        command = command.and(load_operation_details(model, operation, observation_only));
     }
     command
 }
@@ -679,7 +686,12 @@ pub(super) fn apply(
                             "Lookup result lacks the operation's original stored bytes",
                         ));
                     }
-                    let _key = model.cache.insert(observation.clone())?;
+                    let key = model.cache.insert(observation.clone())?;
+                    if model.selected.item.is_none()
+                        && model.selected.observation.as_ref() == Some(operation)
+                    {
+                        model.selected.item = Some(key);
+                    }
                 }
                 RecordLookupStatus::Missing | RecordLookupStatus::Conflicted => {
                     if result.observation.is_some()

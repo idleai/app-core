@@ -8,6 +8,8 @@ use crate::{Core, Effect, Event as RootEvent, subscriptions::Context};
 
 #[cfg(not(target_arch = "wasm32"))]
 mod engine_cases;
+#[cfg(not(target_arch = "wasm32"))]
+mod inspection_cases;
 mod root_cases;
 mod state_cases;
 mod wire_cases;

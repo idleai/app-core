@@ -92,7 +92,7 @@ fn all_five_views_preserve_supplied_fields_and_filter_without_reclassifying() {
 }
 
 #[test]
-fn refresh_replaces_rows_and_preserves_selection_only_while_key_exists() {
+fn changed_limit_retires_reads_and_preserves_selection_only_while_key_exists() {
     let core = ready();
     let selection = ProjectionSelection {
         kind: ProjectionKind::Task,
@@ -100,12 +100,20 @@ fn refresh_replaces_rows_and_preserves_selection_only_while_key_exists() {
     };
     let _effects = send(&core, Event::Select(Some(selection.clone())));
     let mut first = request(send(&core, Event::Refresh));
+    assert!(
+        send(&core, Event::Refresh).is_empty(),
+        "same-scope refreshes coalesce"
+    );
     assert_eq!(
         core.view().projections.tasks.freshness.status,
         FreshnessStatus::Stale,
         "pending read marks old result stale"
     );
-    let mut second = request(send(&core, Event::Refresh));
+    let mut second = request(send(&core, Event::SetLimit(200)));
+    assert_eq!(
+        second.operation.limit, 200,
+        "new read uses the updated limit"
+    );
     let mut changed = snapshot();
     for input in &mut changed.inputs {
         input
@@ -117,9 +125,15 @@ fn refresh_replaces_rows_and_preserves_selection_only_while_key_exists() {
             .expect("reference")
             .observation = Some("01".repeat(32));
     }
-    let _effects = core
+    let effects = core
         .resolve(&mut second, Ok(changed.clone()))
         .expect("new request");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| matches!(effect, Effect::Render(_))),
+        "a changed limit also retires the old queued refresh"
+    );
     let _effects = core
         .resolve(&mut first, Ok(snapshot()))
         .expect("retired request");
@@ -297,5 +311,62 @@ fn invalid_scope_limits_and_selections_do_not_leak_or_request_work() {
     assert!(
         core.view().projections.tasks.rows.is_empty(),
         "disconnect clears rows"
+    );
+}
+
+#[test]
+fn queued_refresh_recovers_from_failure_and_is_retired_on_reconnect() {
+    let core = ready();
+    let mut first = request(send(&core, Event::Refresh));
+    assert!(
+        send(&core, Event::Refresh).is_empty(),
+        "refresh waits for the pending read"
+    );
+    let mut retry = request(
+        core.resolve(
+            &mut first,
+            Err(EffectError {
+                message: "Temporary read failure".into(),
+            }),
+        )
+        .expect("failed read still services the queued invalidation"),
+    );
+    assert_eq!(
+        core.view().projections.load,
+        ProjectionLoadState::Loading,
+        "queued read retries"
+    );
+    assert_eq!(
+        core.view().projections.tasks.freshness.status,
+        FreshnessStatus::Stale,
+        "failed input retains stale rows"
+    );
+    assert!(
+        send(&core, Event::Refresh).is_empty(),
+        "queue another change during recovery"
+    );
+    let _effects = send(&core, Event::Suspend);
+    let _effects = core
+        .resolve(&mut retry, Ok(snapshot()))
+        .expect("retired recovery result");
+    assert_eq!(
+        core.view().projections.load,
+        ProjectionLoadState::Suspended,
+        "old response cannot resume a closed connection"
+    );
+    let mut reconnect = request(send(&core, Event::Reconnect));
+    let effects = core
+        .resolve(&mut reconnect, Ok(snapshot()))
+        .expect("fresh connection");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| matches!(effect, Effect::Render(_))),
+        "old queued invalidations cannot trigger extra reads on a new connection"
+    );
+    assert_eq!(
+        core.view().projections.load,
+        ProjectionLoadState::Ready,
+        "reconnect settles normally"
     );
 }

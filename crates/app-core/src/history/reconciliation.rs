@@ -193,6 +193,7 @@ pub(super) fn apply(
                 .position(|hit| hit.record == old.record)
         })
         .and_then(|index| u32::try_from(index).ok());
+    model.selected = staged.selected;
     model.cache = staged.cache;
     model.items = staged.items;
     model.paging = staged.paging;

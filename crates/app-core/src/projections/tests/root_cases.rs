@@ -3,7 +3,9 @@ use crux_core::Request;
 use super::{context, ready, reference, request, send, snapshot};
 use crate::{
     Core, Effect, Event as RootEvent, history,
-    projections::{Event, ProjectionKind, ProjectionLoadState, ProjectionSelection},
+    projections::{
+        Event, FreshnessStatus, ProjectionKind, ProjectionLoadState, ProjectionSelection,
+    },
     subscriptions::{self, SubscriptionOperation, SubscriptionResult},
     workspace::{
         self, RepositoryInfo, WorkspaceInfo, WorkspaceMode, WorkspaceOperation, WorkspaceResult,
@@ -111,17 +113,23 @@ fn subscription_changes_refresh_projections_and_audience_changes_clear_them() {
     }
     let mut projection = projection.expect("fresh read after join");
     let mut watch = watch.expect("buffered watch");
-    let mut refreshed = request(
-        core.resolve(&mut watch, Ok(SubscriptionResult::Changed))
-            .expect("change during read"),
+    let effects = core
+        .resolve(&mut watch, Ok(SubscriptionResult::Changed))
+        .expect("change during read");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| !matches!(effect, Effect::Projection(_))),
+        "a change during a read queues a follow-up instead of another concurrent read"
     );
-    let _effects = core
-        .resolve(&mut projection, Ok(snapshot()))
-        .expect("retired read");
+    let mut refreshed = request(
+        core.resolve(&mut projection, Ok(snapshot()))
+            .expect("completed read starts the follow-up"),
+    );
     assert_eq!(
         core.view().projections.load,
         ProjectionLoadState::Loading,
-        "change retires an in-flight projection result"
+        "change keeps results stale while the follow-up is loading"
     );
     let _effects = core
         .resolve(&mut refreshed, Ok(snapshot()))
@@ -242,5 +250,109 @@ fn connecting_after_subscription_start_waits_for_notification_buffering() {
         core.view().projections.load,
         ProjectionLoadState::Ready,
         "join starts the pending projection snapshot"
+    );
+}
+
+#[test]
+fn continuous_subscription_changes_advance_rows_with_one_read_at_a_time() {
+    let core = ready();
+    let mut join = subscription_request(core.process_event(RootEvent::Subscriptions(
+        subscriptions::Event::Connect(context()),
+    )));
+    let effects = core
+        .resolve(
+            &mut join,
+            Ok(SubscriptionResult::Joined {
+                connection: "live".into(),
+            }),
+        )
+        .expect("join");
+    let mut read = None;
+    let mut watch = None;
+    for effect in effects {
+        if let Effect::Projection(pending) = effect {
+            read = Some(*pending);
+        } else if let Effect::Subscription(pending) = effect {
+            watch = Some(*pending);
+        }
+    }
+    let mut read = read.expect("projection read after join");
+    let mut watch = watch.expect("watch");
+    let mut input = snapshot();
+    for generation in 1..=20 {
+        for _change in 0..5 {
+            let effects = core
+                .resolve(&mut watch, Ok(SubscriptionResult::Changed))
+                .expect("change during read");
+            assert!(
+                effects
+                    .iter()
+                    .all(|effect| !matches!(effect, Effect::Projection(_))),
+                "invalidations cannot start concurrent projection reads"
+            );
+            watch = subscription_request(effects);
+        }
+        let title = format!("Generation {generation}");
+        for list in &mut input.inputs {
+            list.rows.first_mut().expect("row").title.clone_from(&title);
+        }
+        let effects = core
+            .resolve(&mut read, Ok(input.clone()))
+            .expect("completed read");
+        assert_eq!(
+            effects
+                .iter()
+                .filter(|effect| matches!(effect, Effect::Projection(_)))
+                .count(),
+            1,
+            "all queued invalidations produce just one follow-up"
+        );
+        read = request(effects);
+        let view = core.view().projections;
+        assert_eq!(
+            view.load,
+            ProjectionLoadState::Loading,
+            "follow-up is pending"
+        );
+        assert!(view.needs_refresh, "intermediate snapshot stays stale");
+        for list in [
+            &view.activity,
+            &view.tasks,
+            &view.errors,
+            &view.triage,
+            &view.need_input,
+        ] {
+            assert_eq!(
+                list.rows.first().expect("row").title,
+                title,
+                "every destination advances during continuous changes"
+            );
+            assert_eq!(
+                list.freshness.status,
+                FreshnessStatus::Stale,
+                "intermediate rows cannot claim currentness"
+            );
+        }
+    }
+    let effects = core
+        .resolve(&mut read, Ok(input))
+        .expect("read without further changes");
+    assert!(
+        effects
+            .iter()
+            .all(|effect| matches!(effect, Effect::Render(_))),
+        "no unnecessary follow-up after the final read"
+    );
+    let view = core.view().projections;
+    assert_eq!(
+        view.load,
+        ProjectionLoadState::Ready,
+        "quiet read completes loading"
+    );
+    assert!(!view.needs_refresh, "all changes have been covered");
+    assert_eq!(
+        view.tasks.freshness.status,
+        FreshnessStatus::Current,
+        "provider freshness is restored"
     );
 }

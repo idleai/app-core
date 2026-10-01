@@ -19,6 +19,7 @@ pub struct Model {
     pub(super) load: ProjectionLoadState,
     pub(super) stale: bool,
     pub(super) suspended: bool,
+    pub(super) refresh_again: bool,
     pub(super) limit: Option<u32>,
     pub(super) requests: RequestTracker<ProjectionQuery>,
     pub(super) action_error: Option<EffectError>,
@@ -41,7 +42,7 @@ impl Model {
             self.reset();
             self.context = Some(context);
         }
-        self.requests.clear();
+        self.retire_reads();
         self.suspended = true;
         self.stale = true;
         self.load = ProjectionLoadState::Suspended;
@@ -59,7 +60,7 @@ impl Model {
     }
 
     pub(super) fn reset(&mut self) {
-        self.requests.clear();
+        self.retire_reads();
         self.context = None;
         self.snapshot = None;
         self.filters.clear();
@@ -70,6 +71,11 @@ impl Model {
         self.limit = None;
         self.action_error = None;
         self.history = None;
+    }
+
+    pub(super) fn retire_reads(&mut self) {
+        self.requests.clear();
+        self.refresh_again = false;
     }
 
     fn destination(&self, kind: ProjectionKind) -> ProjectionView {

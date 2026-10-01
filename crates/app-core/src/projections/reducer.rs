@@ -15,7 +15,7 @@ type ProjectionCommand = Command<Effect, ProjectionEvent>;
 pub enum ProjectionEvent {
     /// Bind the current authorized provider/audience and load all destinations.
     Connect(Context),
-    /// Replace all destinations from the start, including lower-ID arrivals.
+    /// Replace all destinations from the start, coalescing changes during a read.
     Refresh,
     /// Change the bounded engine read budget (1 through 1000) and refresh.
     SetLimit(u32),
@@ -91,6 +91,9 @@ impl App for Projections {
                 if !(1..=1000).contains(&limit) {
                     return action_error(model, "Projection read limit must be between 1 and 1000");
                 }
+                if model.limit.unwrap_or(100) != limit {
+                    model.retire_reads();
+                }
                 model.limit = Some(limit);
                 refresh(model)
             }
@@ -118,13 +121,14 @@ impl App for Projections {
                 if model.context.is_none() {
                     return Command::done();
                 }
-                model.requests.clear();
+                model.retire_reads();
                 model.suspended = true;
                 model.stale = true;
                 model.load = ProjectionLoadState::Suspended;
                 render::render()
             }
             ProjectionEvent::Reconnect => {
+                model.retire_reads();
                 model.suspended = false;
                 refresh(model)
             }
@@ -150,7 +154,10 @@ fn refresh(model: &mut Model) -> ProjectionCommand {
     let Some(context) = model.context.clone().filter(|_| !model.suspended) else {
         return Command::done();
     };
-    model.requests.clear();
+    if !model.requests.is_empty() {
+        model.refresh_again = true;
+        return Command::done();
+    }
     model.stale = true;
     let query = ProjectionQuery {
         context,
@@ -202,6 +209,9 @@ fn complete(model: &mut Model, token: u64, result: ProjectionOutput) -> Projecti
             model.stale = true;
         }
     }
+    if std::mem::take(&mut model.refresh_again) {
+        return refresh(model);
+    }
     render::render()
 }
 
@@ -219,13 +229,10 @@ fn inspect(
             "History reference is not supplied on the selected projection row",
         );
     }
-    model.history = Some(match (reference.item, reference.observation) {
-        (None, Some(operation)) => history::Event::LoadOperationDetails {
-            operation,
-            refresh: true,
-        },
-        (item, observation) => history::Event::Select(history::Selected { item, observation }),
-    });
+    model.history = Some(history::Event::Select(history::Selected {
+        item: reference.item,
+        observation: reference.observation,
+    }));
     model.action_error = None;
     render::render()
 }

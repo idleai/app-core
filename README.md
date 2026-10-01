@@ -14,8 +14,9 @@ their owning hosts and services.
 
 Resource and settings modules are still placeholders.
 
-Check out `idleai/editchain` beside this repository at `../editchain` for its schema
-and engine libraries. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
+Check out `idleai/editchain` at `../editchain` and `idleai/web-ui` at `../web-ui`.
+The engine workspace also requires web-ui's shared history geometry manifest
+when Cargo loads its dependencies. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
 WASM target. Run commands from the repository root:
 
 ```sh

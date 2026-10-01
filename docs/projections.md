@@ -59,8 +59,8 @@ visible count and a local filter. No geometry or rendering is included.
 | --- | --- |
 | `SetFilter` | Conjunctive literal title/summary text, exact status and all requested labels. Preserves supplied totals and selection. |
 | `Select` | Selects a stable row key, independent of its current observations. |
-| `Inspect` | Checks that the row supplied the requested source/related reference and routes it into history. Observation-only references request exact details without inventing an item. |
-| `Refresh` | Retires an older read and requests a complete replacement; retained rows become stale. |
+| `Inspect` | Checks that the row supplied the requested source/related reference and selects it in history. Observation-only references refresh exact details and resolve an item only when recorded data supplies it. |
+| `Refresh` | Requests a complete replacement; retained rows become stale. Changes during a read queue one follow-up. |
 | `SetLimit` | Sets the engine candidate budget from 1 through 1000 (default 100) and refreshes. |
 | `Suspend` / `Reconnect` | Retires pending reads, then reads a new snapshot after reconnection. |
 | `Disconnect` | Clears local state without stopping a controller or changing persisted history. |
@@ -69,7 +69,9 @@ Input validation is atomic. Wrong-scope, malformed and retired results cannot
 replace any destination. Failed refreshes retain old rows as stale; successful
 replacement removes retracted rows and clears selection only when its key is gone.
 Subscription joins start buffering notifications before projection reads. Changes
-during a read retire that read and start another replacement. Hosts also invalidate
+during a read coalesce into one follow-up. Completed snapshots advance the rows
+but remain stale until a read finishes without another invalidation. Context,
+limit and connection changes retire pending reads. Hosts also invalidate
 when controller-derived state changes without a new visible history record.
 
 ## Native engine adapter and fixtures
