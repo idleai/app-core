@@ -61,7 +61,7 @@ pub enum SessionEvent {
     Retry(String),
     /// Query an uncertain mutation using its original request key.
     Recover(String),
-    /// Ask for the current runtime fact for a known visible input.
+    /// Ask for the current runtime fact for a known input with observation access.
     RefreshInput(SessionInputRef),
     /// Advance the provider-aligned clock for grant expiry and retry deadlines.
     Tick(u64),
@@ -155,7 +155,7 @@ impl App for Sessions {
             SessionEvent::Recover(id) => mutations::recover(model, &id),
             SessionEvent::RefreshInput(input) => {
                 if !model.state.ready()
-                    || !model.state.visible(&input.session_id)
+                    || !model.state.can_observe(&input.session_id)
                     || !model
                         .state
                         .prompts
@@ -297,7 +297,7 @@ pub(super) fn retire_inaccessible(model: &mut Model) {
         SessionAction::Mutate { mutation, .. } => {
             mutation.session_id().is_none_or(|id| state.visible(id))
         }
-        SessionAction::InputStatus(input) => state.visible(&input.session_id),
+        SessionAction::InputStatus(input) => state.can_observe(&input.session_id),
         SessionAction::Snapshot | SessionAction::Watch { .. } | SessionAction::RequestStatus(_) => {
             true
         }

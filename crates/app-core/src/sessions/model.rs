@@ -98,6 +98,13 @@ impl State {
             .is_some_and(|session| !self.permissions(session).is_empty())
     }
 
+    pub(super) fn can_observe(&self, id: &str) -> bool {
+        self.session(id).is_some_and(|session| {
+            self.permissions(session)
+                .contains(&SessionPermission::Observe)
+        })
+    }
+
     pub(super) fn session(&self, id: &str) -> Option<&SessionInfo> {
         self.snapshot
             .as_ref()?
@@ -136,8 +143,15 @@ impl State {
                 .map(|session| session.id.clone())
                 .collect()
         });
-        self.prompts
-            .retain(|prompt| visible.contains(&prompt.input.session_id));
+        let observable: Vec<_> = visible
+            .iter()
+            .filter(|id| self.can_observe(id))
+            .cloned()
+            .collect();
+        self.prompts.retain(|prompt| {
+            visible.contains(&prompt.input.session_id)
+                && (observable.contains(&prompt.input.session_id) || prompt.text.is_some())
+        });
         if self
             .selected
             .as_ref()
@@ -194,9 +208,15 @@ impl State {
         let prompts = self
             .prompts
             .iter()
-            .filter(|prompt| self.visible(&prompt.input.session_id))
+            .filter(|prompt| {
+                self.visible(&prompt.input.session_id)
+                    && (self.can_observe(&prompt.input.session_id) || prompt.text.is_some())
+            })
             .map(|prompt| {
                 let mut prompt = prompt.clone();
+                if !self.can_observe(&prompt.input.session_id) {
+                    prompt.runtime = None;
+                }
                 prompt.submission = self
                     .mutations
                     .iter()

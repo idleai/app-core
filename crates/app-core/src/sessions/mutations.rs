@@ -353,7 +353,7 @@ pub(super) fn complete(
             },
             SessionResult::Input(update),
         ) if update.input.request == request.key() && update.input.session_id == *session_id => {
-            validation::input(&mut model.state, update)?;
+            validation::input(&mut model.state, update, validation::InputSource::Runtime)?;
             if let Some(mutation) = model
                 .state
                 .mutations
@@ -366,7 +366,7 @@ pub(super) fn complete(
         (SessionAction::InputStatus(input), SessionResult::Input(update))
             if *input == update.input =>
         {
-            validation::input(&mut model.state, update)?;
+            validation::input(&mut model.state, update, validation::InputSource::Runtime)?;
         }
         (
             SessionAction::Mutate {
@@ -391,22 +391,32 @@ pub(super) fn complete(
             }
             let mut bindings = model.bindings.clone();
             validation::remember(&mut bindings, &operation.context, &session)?;
-            if let Some(old) = model.state.known_sessions.get(&session.id) {
-                validation::session_revision(old, &session)?;
-            }
+            let publish = match model.state.known_sessions.get(&session.id) {
+                Some(known) if known.revision >= session.revision => {
+                    validation::session_revision(&session, known)?;
+                    false
+                }
+                Some(known) => {
+                    validation::session_revision(known, &session)?;
+                    true
+                }
+                None => true,
+            };
             let snapshot =
                 model.state.snapshot.as_mut().ok_or_else(|| {
                     validation::invalid("Creation result has no current directory")
                 })?;
-            if let Some(old) = snapshot
-                .sessions
-                .iter_mut()
-                .find(|old| old.id == session.id)
-            {
-                validation::session_revision(old, &session)?;
-                *old = session.clone();
-            } else {
-                snapshot.sessions.push(session.clone());
+            if publish {
+                if let Some(old) = snapshot
+                    .sessions
+                    .iter_mut()
+                    .find(|old| old.id == session.id)
+                {
+                    validation::session_revision(old, &session)?;
+                    *old = session.clone();
+                } else {
+                    snapshot.sessions.push(session.clone());
+                }
             }
             let original = model
                 .state
@@ -415,12 +425,14 @@ pub(super) fn complete(
                 .find(|old| old.request == *request)
                 .ok_or_else(|| validation::invalid("Creation result has no original request"))?;
             original.state = SessionMutationState::Created(session.clone());
-            drop(
-                model
-                    .state
-                    .known_sessions
-                    .insert(session.id.clone(), session),
-            );
+            if publish {
+                drop(
+                    model
+                        .state
+                        .known_sessions
+                        .insert(session.id.clone(), session),
+                );
+            }
             model.bindings = bindings;
         }
         (SessionAction::Mutate { request, mutation }, SessionResult::Acknowledged(ack)) => {

@@ -6,7 +6,9 @@ use super::{Event, SessionAction, SessionOperation, SessionResult, SessionSnapsh
 
 mod adapter_cases;
 mod input_cases;
+mod observation_cases;
 mod recovery_cases;
+mod relocation_cases;
 mod root_cases;
 mod sharing_cases;
 mod wire_cases;

@@ -96,7 +96,7 @@ fn accept_snapshot(
         prompt.text.is_some() || inputs.iter().any(|update| update.input == prompt.input)
     });
     for input in inputs {
-        validation::input(&mut state, input)?;
+        validation::input(&mut state, input, validation::InputSource::Snapshot)?;
     }
     state.load = SessionLoadState::Ready;
     state.updates = SessionLoadState::Ready;
@@ -160,7 +160,7 @@ fn accept_changes(
 
 fn apply(state: &mut State, change: SessionChange) -> Result<(), SessionError> {
     if let SessionChange::Input(update) = change {
-        return validation::input(state, update);
+        return validation::input(state, update, validation::InputSource::Runtime);
     }
     let snapshot = state
         .snapshot

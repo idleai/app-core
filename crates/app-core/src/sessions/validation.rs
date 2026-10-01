@@ -11,6 +11,13 @@ use super::{
     model::State,
 };
 
+/// Recovery facts were authenticated when recorded; new reports use the current binding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum InputSource {
+    Snapshot,
+    Runtime,
+}
+
 pub(super) fn error(code: SessionErrorCode, message: &str) -> SessionError {
     SessionError {
         code,
@@ -317,7 +324,11 @@ fn input_transition(
     Ok(true)
 }
 
-pub(super) fn input(state: &mut State, update: SessionInputUpdate) -> Result<(), SessionError> {
+pub(super) fn input(
+    state: &mut State,
+    update: SessionInputUpdate,
+    source: InputSource,
+) -> Result<(), SessionError> {
     let context = state
         .context
         .as_ref()
@@ -327,6 +338,7 @@ pub(super) fn input(state: &mut State, update: SessionInputUpdate) -> Result<(),
         .ok_or_else(|| invalid("Runtime input references an unknown session"))?;
     contributor(&update.contributor)?;
     nonempty(&update.input.request.request_id)?;
+    nonempty(&update.runtime_id)?;
     if update.input.request.workspace_id != context.workspace_id
         || update.contributor.contributor_id != update.input.request.contributor_id
         || update.revision == 0
@@ -362,7 +374,7 @@ pub(super) fn input(state: &mut State, update: SessionInputUpdate) -> Result<(),
             return Ok(());
         }
     }
-    if update.runtime_id != session.runtime.runtime_id {
+    if source == InputSource::Runtime && update.runtime_id != session.runtime.runtime_id {
         return Err(invalid(
             "Input update is not from the session's bound runtime",
         ));
@@ -386,6 +398,11 @@ pub(super) fn input(state: &mut State, update: SessionInputUpdate) -> Result<(),
                 "Two runtime inputs claim the same session delivery order",
             ));
         }
+    }
+    if !state.can_observe(&update.input.session_id)
+        && previous.is_none_or(|prompt| prompt.text.is_none())
+    {
+        return Ok(());
     }
     if let Some(prompt) = state
         .prompts

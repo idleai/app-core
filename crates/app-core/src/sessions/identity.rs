@@ -272,7 +272,8 @@ pub struct SessionSnapshot {
     pub sessions: Vec<SessionInfo>,
     /// Only session grants; compute/provider grants remain separate.
     pub grants: Vec<SessionGrant>,
-    /// Last retained runtime facts; missing prompt text remains unknown.
+    /// Last retained facts, authenticated by the provider when recorded, including
+    /// prior runtimes after relocation. Missing prompt text remains unknown.
     pub inputs: Vec<SessionInputUpdate>,
     /// Provider's Unix clock for grant and first-receipt deadlines.
     pub now_ms: u64,

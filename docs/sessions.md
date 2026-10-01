@@ -14,12 +14,15 @@ See the typed [events](../crates/app-core/src/sessions/reducer.rs),
 - Ownership and contributor identity are separate. Prompts use the authenticated
   contributor; even owners need a `SubmitInput` grant. Session grants provide no
   compute access. Revocation, expiry and workspace membership govern access.
+  Runtime views and status reads require `Observe`, independently of submission.
 - Pending prompts retain exact local text and attribution. Remote prompt text may
   be unavailable. Only runtime events establish acceptance, delivery order and
   execution; backend receipts, list positions and coordination cursors cannot.
 - Retries preserve the original request key, payload and deadline and require
   `SameRequest` advice. `Recover` queries an uncertain result without resubmitting.
   Same-context refresh preserves selection, local text and newer runtime facts.
+  Snapshots retain authenticated facts from prior runtimes after relocation;
+  new reports must come from the current runtime.
 
 ## Host flow
 

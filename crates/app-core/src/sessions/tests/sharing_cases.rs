@@ -5,7 +5,7 @@ use crate::{
     sessions::{
         Event, SessionAcknowledgement, SessionAction, SessionCapability, SessionChange,
         SessionDraft, SessionErrorCode, SessionGrant, SessionGrantStatus, SessionInfo,
-        SessionMutation, SessionMutationState, SessionPermission, SessionReceipt,
+        SessionLoadState, SessionMutation, SessionMutationState, SessionPermission, SessionReceipt,
         SessionRelationship, SessionResult,
     },
     workspace::WorkspaceMode,
@@ -146,6 +146,140 @@ fn invalid_create_responses_cannot_publish_session_identity() {
                 .iter()
                 .all(|view| view.session.id != "allocated-session"),
             "invalid response changes no directory entries"
+        );
+    }
+}
+
+#[test]
+fn delayed_creation_success_preserves_newer_or_omitted_directory_records() {
+    for case in 0..4 {
+        let source = snapshot(WorkspaceMode::Managed, "contributor-alice");
+        let created = created_session(&source);
+        let mut latest = created.clone();
+        if case >= 2 {
+            latest.revision = 2;
+            latest.title = "Updated by another client".into();
+            latest.runtime.runtime_id = "runtime-moved".into();
+            latest.runtime.host_id = "host-moved".into();
+        }
+        let (core, watch) = connected(source.clone());
+        let mut create = request(send(
+            &core,
+            Event::Create {
+                id: mutation_id("create"),
+                draft: SessionDraft {
+                    title: "New runner".into(),
+                    host_id: "host-shared".into(),
+                    parent: None,
+                },
+            },
+        ));
+        let _watch = deliver(
+            &core,
+            watch,
+            vec![
+                SessionChange::Session(created.clone()),
+                SessionChange::Session(latest.clone()),
+            ],
+        );
+        let omitted = case % 2 == 1;
+        if omitted {
+            let mut without_created = source.clone();
+            without_created.cursor.position = 100;
+            let mut load = request(send(&core, Event::Refresh));
+            let _watch = request(
+                core.resolve(
+                    &mut load,
+                    Ok(SessionResult::Snapshot(Box::new(without_created))),
+                )
+                .expect("directory no longer includes the created session"),
+            );
+        }
+        let result = SessionResult::Created {
+            request: attribution(&create.operation).key(),
+            session: created.clone(),
+        };
+        let _effects = core
+            .resolve(&mut create, Ok(result))
+            .expect("late creation result");
+        let view = core.view().sessions;
+        assert_eq!(
+            view.mutations.first().map(|mutation| &mutation.state),
+            Some(&SessionMutationState::Created(created.clone())),
+            "a delayed acknowledgement still records successful creation"
+        );
+        assert_eq!(
+            view.sessions
+                .iter()
+                .find(|view| view.session.id == created.id)
+                .map(|view| &view.session),
+            (!omitted).then_some(&latest),
+            "an old creation result cannot overwrite or republish directory data"
+        );
+        if case >= 2 {
+            let mut stale = source;
+            stale.sessions.push(created);
+            stale.cursor.position = 101;
+            let mut load = request(send(&core, Event::Refresh));
+            let _effects = core
+                .resolve(&mut load, Ok(SessionResult::Snapshot(Box::new(stale))))
+                .expect("old directory snapshot");
+            assert!(
+                matches!(core.view().sessions.load, SessionLoadState::Failed(_)),
+                "late creation cannot lower the known metadata revision"
+            );
+        }
+    }
+}
+
+#[test]
+fn delayed_creation_rejects_conflicting_revisions_and_rebound_logical_items() {
+    for case in 0..2 {
+        let source = snapshot(WorkspaceMode::Managed, "contributor-alice");
+        let mut created = created_session(&source);
+        let mut known = created.clone();
+        if case == 0 {
+            known.title = "Conflicting title at the same revision".into();
+        } else {
+            known.revision = 2;
+            created.history.item = "d".repeat(64);
+        }
+        let (core, watch) = connected(source);
+        let mut create = request(send(
+            &core,
+            Event::Create {
+                id: mutation_id("create"),
+                draft: SessionDraft {
+                    title: "New runner".into(),
+                    host_id: "host-shared".into(),
+                    parent: None,
+                },
+            },
+        ));
+        let _watch = deliver(&core, watch, vec![SessionChange::Session(known)]);
+        let before = core.view().sessions.sessions;
+        let result = SessionResult::Created {
+            request: attribution(&create.operation).key(),
+            session: created,
+        };
+        let _effects = core
+            .resolve(&mut create, Ok(result))
+            .expect("conflicting creation result");
+        assert!(
+            matches!(
+                core.view()
+                    .sessions
+                    .mutations
+                    .first()
+                    .map(|mutation| &mutation.state),
+                Some(SessionMutationState::Failed(_))
+            ),
+            "acknowledgements still reject conflicting metadata"
+        );
+        assert_eq!(
+            core.view().sessions.sessions,
+            before,
+            "directory remains unchanged"
         );
     }
 }

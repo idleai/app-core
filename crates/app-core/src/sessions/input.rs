@@ -119,7 +119,8 @@ pub struct SessionInputUpdate {
     pub input: SessionInputRef,
     /// Verified original contributor, matching the input's request key.
     pub contributor: SessionContributor,
-    /// Authenticated producer matching the current session runtime binding.
+    /// Authenticated producer: current binding for new reports, possibly a prior
+    /// runtime for retained facts in an authorized recovery snapshot.
     pub runtime_id: String,
     /// Positive monotonic input revision; unrelated to event cursor positions.
     pub revision: u64,
