@@ -3,7 +3,7 @@
 use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
-use crate::{bootstrap, effects::Effect, history, subscriptions, workspace};
+use crate::{bootstrap, effects::Effect, history, sessions, subscriptions, workspace};
 
 /// State owned by one client, partitioned by domain reducer.
 #[derive(Debug, Default)]
@@ -13,6 +13,7 @@ pub struct Model {
     history: history::Model,
     workspace: workspace::Model,
     subscriptions: subscriptions::Model,
+    sessions: sessions::Model,
 }
 
 /// Client actions and domain events accepted by the application.
@@ -29,6 +30,8 @@ pub enum Event {
     Workspace(workspace::Event),
     /// Route shared joins, reconnects and subscription lifetimes.
     Subscriptions(subscriptions::Event),
+    /// Route owned/invited sessions, sharing and attributed prompts.
+    Sessions(sessions::Event),
 }
 
 /// The typed presentation state shared by all client surfaces.
@@ -48,6 +51,8 @@ pub struct ViewModel {
     pub workspace: workspace::ViewModel,
     /// Shared connection status and reconciliation readiness.
     pub subscriptions: subscriptions::SubscriptionViewModel,
+    /// Session selection, pending mutations and runtime-confirmed input facts.
+    pub sessions: sessions::ViewModel,
 }
 
 /// Root reducer composing the shared application's domain modules.
@@ -100,11 +105,32 @@ impl App for IdleApp {
                 return command;
             }
             Event::Subscriptions(event) => return update_subscription(event, model),
+            Event::Sessions(event) => {
+                if let sessions::Event::Connect(context) = &event
+                    && ((model.workspace.owns_history()
+                        && (model.workspace.chain() != Some(context.chain.as_str())
+                            || model.workspace.workspace_id()
+                                != Some(context.workspace_id.as_str())
+                            || model.workspace.coordination_mode() != Some(context.mode)))
+                        || model.subscriptions.context().is_some_and(|active| {
+                            active.workspace != context.workspace_id
+                                || active.chain != context.chain
+                                || active.contributor != context.contributor_id
+                                || active.provider != context.provider
+                        }))
+                {
+                    return Command::done();
+                }
+                return sessions::Sessions
+                    .update(event, &mut model.sessions)
+                    .map_event(Event::Sessions);
+            }
             Event::Workspace(event) => {
                 let before = (
                     model.workspace.chain().map(str::to_owned),
                     model.workspace.owns_history(),
                     model.workspace.workspace_id().map(str::to_owned),
+                    model.workspace.coordination_mode(),
                 );
                 let command = workspace::Workspace
                     .update(event, &mut model.workspace)
@@ -113,12 +139,18 @@ impl App for IdleApp {
                     model.workspace.chain().map(str::to_owned),
                     model.workspace.owns_history(),
                     model.workspace.workspace_id().map(str::to_owned),
+                    model.workspace.coordination_mode(),
                 );
                 if before == after {
                     return command;
                 }
                 let command =
                     command.and(update_subscription(subscriptions::Event::Disconnect, model));
+                let command = command.and(
+                    sessions::Sessions
+                        .update(sessions::Event::Disconnect, &mut model.sessions)
+                        .map_event(Event::Sessions),
+                );
                 model.history.bind(None);
                 let event = after
                     .0
@@ -142,6 +174,7 @@ impl App for IdleApp {
             history: history::History.view(&model.history),
             workspace: workspace::Workspace.view(&model.workspace),
             subscriptions: subscriptions::Subscriptions.view(&model.subscriptions),
+            sessions: sessions::Sessions.view(&model.sessions),
         }
     }
 }
@@ -164,6 +197,22 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             .history
             .bind(after.map(|context| context.chain.clone()));
     }
+    let command = if after.is_some_and(|active| {
+        model.sessions.context().is_some_and(|context| {
+            context.workspace_id != active.workspace
+                || context.chain != active.chain
+                || context.contributor_id != active.contributor
+                || context.provider != active.provider
+        })
+    }) {
+        command.and(
+            sessions::Sessions
+                .update(sessions::Event::Disconnect, &mut model.sessions)
+                .map_event(Event::Sessions),
+        )
+    } else {
+        command
+    };
     if let Some(event) = model.subscriptions.take_history_event() {
         let history = history::History
             .update(event, &mut model.history)

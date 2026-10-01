@@ -35,6 +35,10 @@ impl Model {
         self.view.selected_workspace.as_deref()
     }
 
+    pub(crate) fn coordination_mode(&self) -> Option<super::WorkspaceMode> {
+        self.selected().map(|info| info.mode)
+    }
+
     pub(super) fn selected(&self) -> Option<&WorkspaceInfo> {
         self.view
             .workspaces

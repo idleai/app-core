@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `5`; includes history, workspace and subscription payloads. |
+| `protocol_version()` | Returns `6`; includes history, workspace, subscription and session payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse` or `SubscriptionResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse` or `SessionResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -73,8 +73,13 @@ repository-to-chain bindings, member/presence views and navigation. Hosts resolv
 boxed workspace requests with `request.as_mut()`. Workspace selection wires the
 logical chain into history; repository changes within a workspace retain it.
 
-This foundation handles one-shot effects and render notifications. Subscription
-and reconnect behavior belong to later domain work.
+See [session integration](sessions.md) for owned/invited session state, explicit
+logical history bindings, sharing and attributed runtime input. Production hosts
+report unavailable runtime capabilities until connected; the optional
+`session-fixtures` feature is for development and tests.
+
+See [subscription integration](subscriptions.md) for connection lifetimes and
+reconciliation. Domain effects use typed one-shot continuations and render notifications.
 
 Build with `bash scripts/build-bindings.sh`; prerequisites are in
 [the README](../README.md). The build replaces generated `dist/` contents.

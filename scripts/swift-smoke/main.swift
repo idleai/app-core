@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 5)
+check(core.protocolVersion() == 6)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -55,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 
@@ -166,3 +166,49 @@ func subscriptionSmoke() throws {
 
 try subscriptionSmoke()
 print("Swift subscription join + snapshot + stale watch PASS")
+
+func sessionSmoke(_ mode: WorkspaceMode) throws {
+    let client = AppCore()
+    let context = SessionContext(provider: "fixture", workspaceId: "workspace", contributorId: "bob", chain: "chain", mode: mode)
+    let load = try request(send(client, .sessions(.connect(context))), .session(SessionOperation(context: context, action: .snapshot)))
+    let actor = SessionContributor(contributorId: "bob", issuer: "peer", subject: "bob-key")
+    let cursor = SessionCursor(workspaceId: "workspace", contributorId: "bob", streamId: "stream", position: 100)
+    let binding = SessionItemBinding(chain: "chain", item: String(repeating: "c", count: 64))
+    let session = SessionInfo(id: "session", owner: "alice", title: "Shared 🌍", kind: .runner, revision: 1,
+                              runtime: SessionRuntimeBinding(hostId: "host", runtimeId: "runtime"), parent: nil, history: binding)
+    let grant = SessionGrant(id: "grant", sessionId: "session", grantee: "bob", grantedBy: "alice", permissions: [.observe, .submitInput], expiresAtMs: 2000, revision: 1, status: .active)
+    let members = [MemberInfo(contributorId: "alice", displayName: "Alice", revision: 1, role: .owner, status: .active),
+                   MemberInfo(contributorId: "bob", displayName: "Bob", revision: 1, role: .member, status: .active)]
+    let snapshot = SessionSnapshot(context: context, cursor: cursor, contributor: actor,
+        capabilities: SessionCapabilities(create: .unavailable, input: .available, share: .available),
+        members: members, sessions: [session], grants: [grant], inputs: [], nowMs: 1000)
+    let follow = try EffectBatch.bincodeDeserialize(input: Array(client.handleResponse(id: load, response: Data(SessionResponse.ok(.snapshot(snapshot)).bincodeSerialize())))).requests
+    let watch = try request(follow, .session(SessionOperation(context: context, action: .watch(after: cursor))))
+    check(try view(client).sessions.sessions.first?.relationship == .invited)
+    _ = try send(client, .sessions(.select("session")))
+    check(try view(client).sessions.selectedHistory == binding)
+    let mutationID = SessionMutationId(requestId: "input", expiresAtMs: 2000)
+    let attribution = SessionRequest(workspaceId: "workspace", contributor: actor, mutation: mutationID)
+    let submit = try request(send(client, .sessions(.submit(id: mutationID, text: "Prompt 🌍\n"))),
+        .session(SessionOperation(context: context, action: .mutate(request: attribution, mutation: .submit(sessionId: "session", text: "Prompt 🌍\n")))))
+    let key = SessionRequestKey(workspaceId: "workspace", contributorId: "bob", requestId: "input")
+    let receipt = SessionReceipt(request: key, receivedAtMs: 1000, retryUntilMs: 2500)
+    _ = try client.handleResponse(id: submit, response: Data(SessionResponse.ok(.acknowledged(.received(receipt))).bincodeSerialize()))
+    check(try view(client).sessions.prompts.first?.runtime == nil)
+    check(try view(client).sessions.prompts.first?.contributor == actor)
+    let delivery = SessionDelivery(acceptedAtMs: 1100, order: UInt64.max, orderedAtMs: 1150)
+    let update = SessionInputUpdate(input: SessionInputRef(sessionId: "session", request: key), contributor: actor, runtimeId: "runtime", revision: 4,
+                                    state: .completed(delivery: delivery, completedAtMs: 1500, outcome: .succeeded))
+    let through = SessionCursor(workspaceId: "workspace", contributorId: "bob", streamId: "stream", position: 101)
+    let changes = SessionChanges(after: cursor, through: through, events: [SessionChangeEvent(position: 101, change: .input(update))], nowMs: 1500)
+    _ = try client.handleResponse(id: watch, response: Data(SessionResponse.ok(.changes(changes)).bincodeSerialize()))
+    check(try view(client).sessions.prompts.first?.runtime == update)
+    check(try view(client).sessions.prompts.first?.text == "Prompt 🌍\n")
+    _ = try send(client, .sessions(.tick(2000)))
+    check(try view(client).sessions.selected == nil)
+    check(try view(client).sessions.prompts.isEmpty)
+}
+
+try sessionSmoke(.standalone)
+try sessionSmoke(.managed)
+print("Swift session attribution + receipt + runtime completion + expiry in both modes PASS")
