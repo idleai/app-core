@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `6`; includes history, workspace, subscription and session payloads. |
+| `protocol_version()` | Returns `7`; includes history, workspace, subscription, session and projection payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse` or `SessionResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse` or `ProjectionResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -80,6 +80,12 @@ report unavailable runtime capabilities until connected; the optional
 
 See [subscription integration](subscriptions.md) for connection lifetimes and
 reconciliation. Domain effects use typed one-shot continuations and render notifications.
+
+See [projection integration](projections.md) for shared `idle-protocol` inputs,
+engine reads, controller mapping and the five typed destinations. Protocol 7 adds
+`Event::Projections`, `Effect::Projection` and the root `projections` view. Hosts
+must add the effect arm and regenerate matching codecs; the JSON coordination
+protocol remains v1. Development fixtures require `projection-fixtures`.
 
 Build with `bash scripts/build-bindings.sh`; prerequisites are in
 [the README](../README.md). The build replaces generated `dist/` contents.

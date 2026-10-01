@@ -10,6 +10,7 @@ pub mod events;
 pub mod grants;
 pub mod identity;
 pub mod membership;
+pub mod projections;
 pub mod resources;
 pub mod sessions;
 pub mod workspace;

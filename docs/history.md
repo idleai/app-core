@@ -38,7 +38,7 @@ their real connection is supplied.
 | `SetFilter` | Restart history and search scans with conjunctive kinds/session/author/recorder/path filters. Preserve selection within the chain. |
 | `LoadMore` / `SearchMore` | Continue after the last inspected candidate, or retry a failed page. |
 | `Search` / `NavigateMatch` | Search case-sensitive UTF-8 bytes and navigate to the matching operations and fields. Whitespace is meaningful. |
-| `Select` | Select a logical item and optionally one of its recorded operations. Load item context, stored records and field content. |
+| `Select` | Select a logical item or observation. Load item context, stored records and field content. An observation without an item refreshes its details and resolves the item only when recorded data supplies it. |
 | `ToggleDisclosure` / `LoadItem` | Expand by logical identity and load further observations for that item. |
 | `LoadOperationDetails` | Cache an operation's stored records and field content; `refresh: true` rechecks late or changed availability. |
 | `Refresh` | Atomically reconcile loaded windows from the beginning, retaining visible data, selection and disclosure while the read runs. |

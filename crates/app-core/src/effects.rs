@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
+use crate::projections::{ProjectionOutput, ProjectionQuery};
 use crate::sessions::{SessionOperation, SessionOutput};
 use crate::subscriptions::{SubscriptionOperation, SubscriptionOutput};
 use crate::workspace::{WorkspaceOperation, WorkspaceOutput};
@@ -74,6 +75,8 @@ pub enum Effect {
     Subscription(Box<Request<SubscriptionOperation>>),
     /// Execute session creation, sharing, attributed input or retained recovery.
     Session(Box<Request<SessionOperation>>),
+    /// Read a replacement of all five projection destinations.
+    Projection(Box<Request<ProjectionQuery>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -114,6 +117,12 @@ impl From<Request<SessionOperation>> for Effect {
     }
 }
 
+impl From<Request<ProjectionQuery>> for Effect {
+    fn from(request: Request<ProjectionQuery>) -> Self {
+        Self::Projection(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -130,6 +139,8 @@ pub enum EffectFfi {
     Subscription(Box<SubscriptionOperation>),
     /// Return a session response for this request ID.
     Session(Box<SessionOperation>),
+    /// Return a projection response for this request ID.
+    Projection(Box<ProjectionQuery>),
 }
 
 impl EffectFfi {
@@ -140,7 +151,8 @@ impl EffectFfi {
             | Self::History(_)
             | Self::Workspace(_)
             | Self::Subscription(_)
-            | Self::Session(_) => true,
+            | Self::Session(_)
+            | Self::Projection(_) => true,
         }
     }
 
@@ -167,6 +179,10 @@ impl EffectFfi {
                 let _result: SessionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
+            Self::Projection(_) => {
+                let _result: ProjectionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
         }
     }
 }
@@ -189,6 +205,9 @@ impl EffectFFI for Effect {
             }
             Self::Session(request) => {
                 request.serialize(|operation| EffectFfi::Session(Box::new(operation)))
+            }
+            Self::Projection(request) => {
+                request.serialize(|operation| EffectFfi::Projection(Box::new(operation)))
             }
         }
     }

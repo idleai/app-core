@@ -80,6 +80,18 @@ import ai.idle.appcore.types.SessionResponse
 import ai.idle.appcore.types.SessionResult
 import ai.idle.appcore.types.SessionRuntimeBinding
 import ai.idle.appcore.types.SessionSnapshot
+import ai.idle.appcore.types.FreshnessStatus
+import ai.idle.appcore.types.ProjectionAvailability
+import ai.idle.appcore.types.ProjectionEvent
+import ai.idle.appcore.types.ProjectionFilter
+import ai.idle.appcore.types.ProjectionFreshness
+import ai.idle.appcore.types.ProjectionInput
+import ai.idle.appcore.types.ProjectionKind
+import ai.idle.appcore.types.ProjectionQuery
+import ai.idle.appcore.types.ProjectionReference
+import ai.idle.appcore.types.ProjectionResponse
+import ai.idle.appcore.types.ProjectionRow
+import ai.idle.appcore.types.ProjectionSnapshot
 
 private fun view(core: AppCore): ViewModel = ViewModel.bincodeDeserialize(core.view())
 
@@ -104,7 +116,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 6u)
+    check(core.protocolVersion() == 7u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -115,7 +127,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     val effects = send(core, Event.Start)
     val id = effects.request(EffectFfi.HostInfo)
     val renderId = effects.first { it.effect == EffectFfi.Render }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -125,7 +137,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
     check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
@@ -253,6 +265,27 @@ private fun sessionSmoke(mode: WorkspaceMode) = AppCore().use { client ->
     check(view(client).sessions.prompts.isEmpty())
 }
 
+private fun projectionSmoke() = AppCore().use { client ->
+    val context = Context("managed", "workspace", "alice", "chain")
+    val load = send(client, Event.Projections(ProjectionEvent.Connect(context)))
+        .request(EffectFfi.Projection(ProjectionQuery(context, 100u)))
+    val source = ProjectionReference("ab".repeat(32), "cd".repeat(32), "ef".repeat(32))
+    val row = ProjectionRow("stable-task", "Check 🌍", "Exact details\n", "provider/active", listOf("supplied"), listOf(source), emptyList())
+    val freshness = ProjectionFreshness(FreshnessStatus.CURRENT, 1000uL, "opaque/checkpoint")
+    val inputs = listOf(ProjectionKind.ACTIVITY, ProjectionKind.TASK, ProjectionKind.ERROR, ProjectionKind.TRIAGE, ProjectionKind.NEEDINPUT).map {
+        ProjectionInput(it, freshness, ProjectionAvailability.COMPLETE, 1uL, listOf(row), emptyList())
+    }
+    val snapshot = ProjectionSnapshot(1u, "workspace", "chain", inputs)
+    respond(client, load, ProjectionResponse.Ok(snapshot).bincodeSerialize())
+    check(view(client).projections.tasks.rows.single().sources.single() == source)
+    check(view(client).projections.needInput.freshness == freshness)
+    send(client, Event.Projections(ProjectionEvent.SetFilter(ProjectionKind.TASK, ProjectionFilter("absent", null, emptyList()))))
+    check(view(client).projections.tasks.visibleCount == 0uL)
+    check(view(client).projections.tasks.total == 1uL)
+    send(client, Event.Projections(ProjectionEvent.Refresh))
+    check(view(client).projections.tasks.freshness.status == FreshnessStatus.STALE)
+}
+
 fun main() {
     val core = AppCore()
     core.use { AppCore().use { other -> exercise(core, other) } }
@@ -263,9 +296,11 @@ fun main() {
     subscriptionSmoke()
     sessionSmoke(WorkspaceMode.STANDALONE)
     sessionSmoke(WorkspaceMode.MANAGED)
+    projectionSmoke()
     println("Kotlin/JVM + JNI + Facet: event -> effect -> result -> typed view PASS")
     println("Kotlin/JVM operation records/content request -> result PASS")
     println("Kotlin/JVM workspace selection + members + presence in both modes PASS")
     println("Kotlin/JVM subscription join + snapshot + stale watch PASS")
     println("Kotlin/JVM session attribution + receipt + runtime completion + expiry in both modes PASS")
+    println("Kotlin/JVM projection inputs + references + freshness + filtering PASS")
 }

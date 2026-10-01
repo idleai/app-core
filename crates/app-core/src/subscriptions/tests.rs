@@ -17,8 +17,11 @@ fn work(effects: Vec<Effect>) -> Work {
         match effect {
             Effect::Subscription(request) => work.connections.push(*request),
             Effect::History(request) => work.reads.push(*request),
-            Effect::Render(_) | Effect::HostInfo(_) | Effect::Workspace(_) | Effect::Session(_) => {
-            }
+            Effect::Render(_)
+            | Effect::HostInfo(_)
+            | Effect::Workspace(_)
+            | Effect::Session(_)
+            | Effect::Projection(_) => {}
         }
     }
     work
