@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
+use crate::sessions::{SessionOperation, SessionOutput};
 use crate::subscriptions::{SubscriptionOperation, SubscriptionOutput};
 use crate::workspace::{WorkspaceOperation, WorkspaceOutput};
 
@@ -71,6 +72,8 @@ pub enum Effect {
     Workspace(Box<Request<WorkspaceOperation>>),
     /// Execute authorized joins, buffered change watches, release or retry timers.
     Subscription(Box<Request<SubscriptionOperation>>),
+    /// Execute session creation, sharing, attributed input or retained recovery.
+    Session(Box<Request<SessionOperation>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -105,6 +108,12 @@ impl From<Request<SubscriptionOperation>> for Effect {
     }
 }
 
+impl From<Request<SessionOperation>> for Effect {
+    fn from(request: Request<SessionOperation>) -> Self {
+        Self::Session(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -119,13 +128,19 @@ pub enum EffectFfi {
     Workspace(Box<WorkspaceOperation>),
     /// Return a subscription response for this request ID.
     Subscription(Box<SubscriptionOperation>),
+    /// Return a session response for this request ID.
+    Session(Box<SessionOperation>),
 }
 
 impl EffectFfi {
     pub(crate) const fn expects_response(&self) -> bool {
         match self {
             Self::Render => false,
-            Self::HostInfo | Self::History(_) | Self::Workspace(_) | Self::Subscription(_) => true,
+            Self::HostInfo
+            | Self::History(_)
+            | Self::Workspace(_)
+            | Self::Subscription(_)
+            | Self::Session(_) => true,
         }
     }
 
@@ -148,6 +163,10 @@ impl EffectFfi {
                 let _result: SubscriptionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
+            Self::Session(_) => {
+                let _result: SessionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
         }
     }
 }
@@ -167,6 +186,9 @@ impl EffectFFI for Effect {
             }
             Self::Subscription(request) => {
                 request.serialize(|operation| EffectFfi::Subscription(Box::new(operation)))
+            }
+            Self::Session(request) => {
+                request.serialize(|operation| EffectFfi::Session(Box::new(operation)))
             }
         }
     }

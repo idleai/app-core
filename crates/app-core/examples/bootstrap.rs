@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             Effect::History(_) => {
                 return Err(io::Error::other("unexpected history operation").into());
             }
-            Effect::Subscription(_) | Effect::Workspace(_) => {
+            Effect::Subscription(_) | Effect::Workspace(_) | Effect::Session(_) => {
                 return Err(io::Error::other("unexpected workspace operation").into());
             }
             Effect::HostInfo(mut request) => {

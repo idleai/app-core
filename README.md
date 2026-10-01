@@ -1,7 +1,7 @@
 # app-core
 
 Shared Rust application state for Idle. Crux reducers manage history, workspace
-navigation and subscription recovery. Hosts execute typed effects and render
+navigation, owned/invited sessions and subscription recovery. Hosts execute typed effects and render
 views; storage, transports, inference and authorization enforcement stay with
 their owning hosts and services.
 
@@ -12,7 +12,7 @@ their owning hosts and services.
 | [idle-protocol](crates/idle-protocol) | Versioned coordination contracts, independent of Crux. |
 | [idle-history](crates/idle-history) | Portable history and connection state shared with the legacy EditChain viewer. |
 
-Session, projection, resource and settings modules are still placeholders.
+Projection, resource and settings modules are still placeholders.
 
 Check out `idleai/editchain` beside this repository at `../editchain` for its schema
 and engine libraries. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
@@ -37,7 +37,7 @@ and Swift/Kotlin round trips through the native library. Apple/Android device
 builds require their platform SDKs separately.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **5** requires matching native bindings and
+under ignored `dist/`. Shell protocol **6** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:
@@ -45,6 +45,7 @@ Integration guides:
 - [Runtime and native bindings](docs/runtime.md) — host effect loop, codecs and packaging.
 - [History](docs/history.md) — selection, search, paging and recorded content.
 - [Workspaces](docs/workspace.md) — repository bindings, members and presence.
+- [Sessions](docs/sessions.md) — creation, sharing, explicit history bindings and attributed input.
 - [Subscriptions](docs/subscriptions.md) — joins, reconnects and snapshot reconciliation.
 - [Coordination protocol](crates/idle-protocol/README.md) — public contracts and JSON Schema.
 
