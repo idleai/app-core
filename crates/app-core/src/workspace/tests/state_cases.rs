@@ -61,7 +61,8 @@ fn standalone_selection_sends_only_a_chain_to_history_without_sign_in() {
             Effect::Render(_)
             | Effect::Subscription(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => {}
+            | Effect::Projection(_)
+            | Effect::Resource(_) => {}
             Effect::HostInfo(_) => saw_host_info = true,
         }
     }
@@ -557,7 +558,8 @@ fn removing_workspace_discards_inflight_history_and_independent_clients_stay_iso
             | Effect::HostInfo(_)
             | Effect::Subscription(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => None,
+            | Effect::Projection(_)
+            | Effect::Resource(_) => None,
         })
         .expect("history query");
     let _effects = send(&core, Event::Disconnect);

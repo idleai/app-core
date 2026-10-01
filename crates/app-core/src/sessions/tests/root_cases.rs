@@ -20,7 +20,8 @@ fn workspace_request(effects: Vec<Effect>) -> Request<WorkspaceOperation> {
             | Effect::History(_)
             | Effect::Subscription(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => None,
+            | Effect::Projection(_)
+            | Effect::Resource(_) => None,
         })
         .expect("workspace request")
 }

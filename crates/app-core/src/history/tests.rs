@@ -70,7 +70,8 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<Query>> {
             | Effect::Workspace(_)
             | Effect::Subscription(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => None,
+            | Effect::Projection(_)
+            | Effect::Resource(_) => None,
         })
         .collect()
 }

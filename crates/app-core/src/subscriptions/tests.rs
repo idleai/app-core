@@ -21,7 +21,8 @@ fn work(effects: Vec<Effect>) -> Work {
             | Effect::HostInfo(_)
             | Effect::Workspace(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => {}
+            | Effect::Projection(_)
+            | Effect::Resource(_) => {}
         }
     }
     work

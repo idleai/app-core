@@ -12,6 +12,7 @@ repository = "https://github.com/idleai/app-core"
 typegen = ["dep:facet_generate"]
 session-fixtures = []
 projection-fixtures = []
+resource-fixtures = []
 
 [dependencies]
 crux_core = { version = "=0.20.0", default-features = false }
