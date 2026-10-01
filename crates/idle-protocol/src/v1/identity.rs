@@ -148,6 +148,8 @@ counters! {
     InputRevision;
     /// Milliseconds since the Unix epoch; clocks do not define event/input ordering.
     Timestamp;
+    /// Provider-supplied count of rows in a projection, independent of paging.
+    ProjectionCount;
 }
 
 /// Identity in an external authentication namespace, with no credentials.

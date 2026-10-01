@@ -150,7 +150,8 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<SessionOperation>> {
             | Effect::HostInfo(_)
             | Effect::History(_)
             | Effect::Workspace(_)
-            | Effect::Subscription(_) => None,
+            | Effect::Subscription(_)
+            | Effect::Projection(_) => None,
         })
         .collect()
 }

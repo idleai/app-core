@@ -87,7 +87,8 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<WorkspaceOperation>> {
             | Effect::HostInfo(_)
             | Effect::History(_)
             | Effect::Subscription(_)
-            | Effect::Session(_) => None,
+            | Effect::Session(_)
+            | Effect::Projection(_) => None,
         })
         .collect()
 }

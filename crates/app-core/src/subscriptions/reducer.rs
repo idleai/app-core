@@ -31,6 +31,10 @@ impl Model {
         self.context.as_ref()
     }
 
+    pub(crate) fn has_connection(&self) -> bool {
+        self.connection.is_some()
+    }
+
     pub(crate) fn take_history_event(&mut self) -> Option<history::Event> {
         self.history.take()
     }
