@@ -80,6 +80,30 @@ fn target(value: &ModelTarget) -> Result<(), ResourceError> {
     Ok(())
 }
 
+pub(super) fn mutation(value: &super::ResourceMutation) -> Result<(), ResourceError> {
+    let valid = match value {
+        super::ResourceMutation::ConnectHost { host_id } => !host_id.is_empty(),
+        super::ResourceMutation::SelectModel {
+            target: value,
+            model,
+        } => {
+            target(value)?;
+            !model.provider_id.is_empty() && !model.model_id.is_empty()
+        }
+        super::ResourceMutation::InstallModel(package) => {
+            [&package.host_id, &package.runtime_id, &package.package_id]
+                .iter()
+                .all(|id| !id.is_empty())
+        }
+    };
+    if !valid {
+        return Err(invalid(
+            "Persisted resource intent has an empty target identity",
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn snapshot(
     value: &ResourceSnapshot,
     scope: &ResourceContext,

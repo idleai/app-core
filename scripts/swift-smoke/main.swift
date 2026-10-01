@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 8)
+check(core.protocolVersion() == 9)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -272,8 +272,21 @@ func resourceSmoke(_ mode: WorkspaceMode) throws {
     _ = try send(client, .resources(.advanceClock(3000)))
     check(try view(client).resources.controller.assignment == .expired)
     check(try view(client).resources.models.first?.availability == .unknown)
+
+    let restored = AppCore()
+    let restoredLoad = try request(send(restored, .resources(.connect(context))), .resource(ResourceOperation(context: context, kind: .snapshot)))
+    _ = try restored.handleResponse(id: restoredLoad, response: Data(ResourceResponse.ok(.snapshot(snapshot)).bincodeSerialize()))
+    _ = try send(restored, .resources(.advanceClock(2100)))
+    let recover = try request(send(restored, .resources(.restore(context: context, request: identity, mutation: mutation))), .resource(ResourceOperation(context: context, kind: .status(identity))))
+    check(try view(restored).resources.mutations.first?.request == identity)
+    check(try view(restored).resources.mutations.first?.pending == true)
+    check(try view(restored).resources.mutations.first?.progress == nil)
+    check(try send(restored, .resources(.restore(context: context, request: identity, mutation: mutation))).isEmpty)
+    _ = try restored.handleResponse(id: recover, response: Data(ResourceResponse.ok(.progress(ResourceProgress(context: context, request: identity, revision: 2, stage: .failed(failure)))).bincodeSerialize()))
+    check(try view(restored).resources.mutations.first?.pending == false)
+    check(try view(restored).resources.mutations.first?.progress?.stage == .failed(failure))
 }
 
 try resourceSmoke(.standalone)
 try resourceSmoke(.managed)
-print("Swift resource actions + progress + controller epochs/expiry in both modes PASS")
+print("Swift resource actions + progress + restoration + controller epochs/expiry in both modes PASS")

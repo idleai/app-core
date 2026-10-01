@@ -6,9 +6,10 @@ model and controller state in standalone and managed workspaces. The enclosing
 contributor, logical chain and coordination mode. Hosts and providers may appear
 in multiple workspaces; discovery and permissions belong to each binding.
 
-Shell protocol **8** adds `Effect::Resource` and `ResourceResponse`. Rust/WASM
-hosts must handle the new effect. Regenerate Swift/Kotlin codecs together with
-the native library. The f20 coordination JSON protocol remains v1.
+Shell protocol **9** includes `Effect::Resource`, `ResourceResponse` and the
+`Restore` event for persisted actions. Rust/WASM hosts must handle resource effects.
+Regenerate Swift/Kotlin codecs together with the native library. The f20
+coordination JSON protocol remains v1.
 
 ## Discovery and availability
 
@@ -89,13 +90,28 @@ Runtime success triggers a fresh discovery read; completion alone cannot invent
 an installed publication or a selected model. `Refresh` also queries pending
 action statuses. Hosts should deliver shared subscription invalidations when
 progress changes, so all clients converge on the retained runtime facts.
+Notifications received during a mutation/status request remain queued. Once that
+request finishes and discovery is ready, the core queries status again unless the
+result is terminal. Multiple notifications coalesce; an ordinary pending response
+does not start a polling loop.
 
 `Suspend` retires continuations and marks pending operations uncertain. Same-context
 `Reconnect` preserves their immutable requests, refreshes discovery and then checks
 status. Switching workspace, provider, audience, chain or mode clears this client's
-resource state and rejects old responses. Host persistence is responsible for
-recovering action identities across client destruction. Repository navigation
-inside the same workspace preserves resource selection.
+resource state and rejects old responses. After client destruction or a context
+switch, the host sends `Connect(context)` followed by `Restore { context, request,
+mutation }` for each persisted unresolved action. Restoration requires its exact
+original context, identity, deadline and intent. It records an uncertain pending
+action and requests its original status once authorized discovery is ready; it
+never dispatches execution or restores saved success/retry claims. Restore may
+arrive while discovery or a subscription join is pending. Duplicate restores are
+idempotent; changing an existing request's deadline or intent is rejected.
+
+An elapsed first-receipt deadline, removed publication or changed capability does
+not prevent restoration or status lookup. Execution retries still require explicit
+runtime advice, an unexpired deadline and current permissions/capabilities. Hosts
+retain unresolved requests until an authenticated terminal result is recorded.
+Repository navigation inside the same workspace preserves resource selection.
 
 ## Controller presentation
 

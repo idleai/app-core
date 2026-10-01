@@ -1,6 +1,6 @@
 //! Client-local interaction state and conservative action presentation.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use idle_history::requests::RequestTracker;
 
@@ -23,6 +23,8 @@ pub struct Model {
     pub(super) selected_host: Option<String>,
     pub(super) selected_provider: Option<String>,
     pub(super) mutations: Vec<ResourceMutationView>,
+    // Keep notifications until a status request starts after their arrival.
+    pub(super) status_dirty: BTreeSet<String>,
     pub(super) requests: RequestTracker<ResourceOperation>,
     pub(super) now_ms: u64,
     pub(super) refresh_again: bool,
@@ -45,6 +47,7 @@ impl Model {
         self.selected_host = None;
         self.selected_provider = None;
         self.mutations.clear();
+        self.status_dirty.clear();
         self.now_ms = 0;
         self.refresh_again = false;
         self.action_error = None;
@@ -64,6 +67,7 @@ impl Model {
 
     pub(super) fn suspend(&mut self) {
         self.requests.clear();
+        self.status_dirty.clear();
         self.refresh_again = false;
         self.load = ResourceLoadState::Suspended;
         for mutation in &mut self.mutations {

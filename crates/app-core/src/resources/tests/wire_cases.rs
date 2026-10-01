@@ -17,8 +17,8 @@ fn bytes(value: &impl serde::Serialize) -> Vec<u8> {
 #[test]
 fn resource_shell_round_trips_full_epochs_and_validates_responses_before_consumption() {
     assert_eq!(
-        PROTOCOL_VERSION, 8,
-        "resource event/effect/view change requires shell protocol 8"
+        PROTOCOL_VERSION, 9,
+        "resource restoration requires shell protocol 9"
     );
     let shell = Shell::new();
     let batch: EffectBatch = ShellFormat::deserialize(

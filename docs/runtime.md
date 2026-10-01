@@ -27,7 +27,7 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `8`; includes history, workspace, subscription, session, projection and resource payloads. |
+| `protocol_version()` | Returns `9`; includes history, workspace, subscription, session, projection and resource payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
 | `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse` or `ResourceResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
@@ -92,6 +92,9 @@ model selection/installation and controller status. Protocol 8 adds
 `Event::Resources`, `Effect::Resource` and the root `resources` view. Hosts must
 handle the new effect and regenerate codecs with the native library. Runtime
 actions remain unavailable until connected; `resource-fixtures` is development-only.
+Protocol 9 adds `ResourceEvent::Restore` to recover persisted resource actions
+after client destruction without submitting execution again. Regenerate the
+payload codecs together with the native library.
 
 Build with `bash scripts/build-bindings.sh`; prerequisites are in
 [the README](../README.md). The build replaces generated `dist/` contents.

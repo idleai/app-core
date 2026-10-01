@@ -43,6 +43,16 @@ pub enum ResourceEvent {
     Reconnect,
     /// Retire all work and clear this client's resource scope.
     Disconnect,
+    /// Restore a host-persisted action as uncertain and query its original status.
+    /// An elapsed first-receipt deadline does not prevent restoration or lookup.
+    Restore {
+        /// Original binding; must exactly match the connected resource context.
+        context: ResourceContext,
+        /// Persisted identity and unchanged first-receipt deadline.
+        request: ResourceRequest,
+        /// Original immutable intent, never executed by this event.
+        mutation: ResourceMutation,
+    },
     /// Internal host continuation, excluded from serialized client actions.
     #[serde(skip)]
     #[facet(skip)]
@@ -112,6 +122,11 @@ impl App for Resources {
             ResourceEvent::Execute { request, mutation } => {
                 mutations::execute(model, request, mutation)
             }
+            ResourceEvent::Restore {
+                context,
+                request,
+                mutation,
+            } => mutations::restore(model, &context, request, mutation),
             ResourceEvent::Retry(id) => {
                 mutations::recover(model, &id, super::ResourceRecoveryAction::Retry)
             }
@@ -178,6 +193,7 @@ pub(super) fn refresh(model: &mut Model) -> ResourceCommand {
     if model.context.is_none() || model.load == ResourceLoadState::Suspended {
         return Command::done();
     }
+    mutations::invalidate(model);
     if model
         .requests
         .values()
@@ -186,6 +202,10 @@ pub(super) fn refresh(model: &mut Model) -> ResourceCommand {
         model.refresh_again = true;
         return Command::done();
     }
+    start_snapshot(model)
+}
+
+fn start_snapshot(model: &mut Model) -> ResourceCommand {
     model.load = ResourceLoadState::Loading;
     model.action_error = None;
     dispatch(model, ResourceOperationKind::Snapshot)
@@ -248,6 +268,7 @@ fn complete(model: &mut Model, token: u64, result: ResourceOutput) -> ResourceCo
                 model.selected_host = None;
                 model.selected_provider = None;
                 model.mutations.clear();
+                model.status_dirty.clear();
                 model.refresh_again = false;
             }
             model.load = ResourceLoadState::Failed(error);
@@ -255,7 +276,7 @@ fn complete(model: &mut Model, token: u64, result: ResourceOutput) -> ResourceCo
     }
     let command = mutations::reconcile(model);
     if std::mem::take(&mut model.refresh_again) {
-        return command.and(refresh(model));
+        return command.and(start_snapshot(model));
     }
     command.and(render::render())
 }

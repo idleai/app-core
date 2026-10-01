@@ -99,6 +99,54 @@ fn resource_loading_waits_for_buffered_join_and_cannot_override_the_audience() {
 }
 
 #[test]
+fn persisted_resource_actions_wait_for_the_subscription_join_before_status_lookup() {
+    let core = Core::new();
+    let mut join = subscription_request(core.process_event(RootEvent::Subscriptions(
+        subscriptions::Event::Connect(subscription_context()),
+    )));
+    let mut source = snapshot();
+    source.now_ms = 2100;
+    let _effects = send(&core, Event::Connect(source.context.clone()));
+    let identity = crate::resources::ResourceRequest {
+        request_id: "saved-before-join".into(),
+        expires_at_ms: 2000,
+    };
+    assert!(
+        send(
+            &core,
+            Event::Restore {
+                context: source.context.clone(),
+                request: identity.clone(),
+                mutation: crate::resources::ResourceMutation::ConnectHost {
+                    host_id: "host-shared".into(),
+                },
+            }
+        )
+        .iter()
+        .all(|effect| matches!(effect, Effect::Render(_))),
+        "restored work cannot bypass subscription buffering"
+    );
+    let mut load = request(
+        core.resolve(
+            &mut join,
+            Ok(SubscriptionResult::Joined {
+                connection: "joined".into(),
+            }),
+        )
+        .expect("buffered join"),
+    );
+    let status = request(
+        core.resolve(&mut load, Ok(ResourceResult::Snapshot(Box::new(source))))
+            .expect("authorized discovery"),
+    );
+    assert_eq!(
+        status.operation.kind,
+        crate::resources::ResourceOperationKind::Status(identity),
+        "join and discovery recover the expired request without execution"
+    );
+}
+
+#[test]
 fn subscription_changes_coalesce_refreshes_and_switching_audience_retires_results() {
     let core = ready();
     let mut join = subscription_request(core.process_event(RootEvent::Subscriptions(

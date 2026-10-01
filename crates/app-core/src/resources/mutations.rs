@@ -3,9 +3,9 @@
 use crux_core::{Command, render};
 
 use super::{
-    Model, ResourceActionStage, ResourceError, ResourceMutation, ResourceMutationView,
-    ResourceOperationKind, ResourceOutput, ResourceProgress, ResourceRecoveryAction,
-    ResourceRequest, ResourceResult,
+    Model, ResourceActionStage, ResourceContext, ResourceError, ResourceMutation,
+    ResourceMutationView, ResourceOperationKind, ResourceOutput, ResourceProgress,
+    ResourceRecoveryAction, ResourceRequest, ResourceResult,
     model::terminal,
     reducer::{ResourceCommand, action_error, dispatch, refresh},
     validation,
@@ -16,21 +16,8 @@ pub(super) fn execute(
     request: ResourceRequest,
     mutation: ResourceMutation,
 ) -> ResourceCommand {
-    if let Some(old) = model
-        .mutations
-        .iter()
-        .find(|old| old.request.request_id == request.request_id)
-    {
-        return if old.request == request && old.mutation == mutation {
-            Command::done()
-        } else {
-            action_error(
-                model,
-                validation::selection(
-                    "Request identity already belongs to another immutable resource action",
-                ),
-            )
-        };
+    if let Some(command) = existing_action(model, &request, &mutation) {
+        return command;
     }
     if request.request_id.is_empty() || request.expires_at_ms <= model.now_ms {
         return action_error(
@@ -57,6 +44,74 @@ pub(super) fn execute(
     });
     model.action_error = None;
     dispatch(model, ResourceOperationKind::Mutate { request, mutation })
+}
+
+fn existing_action(
+    model: &mut Model,
+    request: &ResourceRequest,
+    mutation: &ResourceMutation,
+) -> Option<ResourceCommand> {
+    if let Some(old) = model
+        .mutations
+        .iter()
+        .find(|old| old.request.request_id == request.request_id)
+    {
+        return Some(if &old.request == request && &old.mutation == mutation {
+            Command::done()
+        } else {
+            action_error(
+                model,
+                validation::selection(
+                    "Request identity already belongs to another immutable resource action",
+                ),
+            )
+        });
+    }
+    None
+}
+
+pub(super) fn restore(
+    model: &mut Model,
+    context: &ResourceContext,
+    request: ResourceRequest,
+    mutation: ResourceMutation,
+) -> ResourceCommand {
+    if model.context() != Some(context) {
+        return action_error(
+            model,
+            validation::selection("Persisted resource action belongs to another context"),
+        );
+    }
+    if let Some(command) = existing_action(model, &request, &mutation) {
+        return command;
+    }
+    if request.request_id.is_empty() || request.expires_at_ms == 0 {
+        return action_error(
+            model,
+            validation::selection("Persisted resource action has an invalid identity or deadline"),
+        );
+    }
+    if let Err(error) = validation::mutation(&mutation) {
+        return action_error(model, error);
+    }
+    let id = request.request_id.clone();
+    let _inserted = model.status_dirty.insert(id.clone());
+    model.mutations.push(ResourceMutationView {
+        request,
+        mutation,
+        progress: None,
+        pending: true,
+        in_flight: false,
+        error: Some(validation::uncertain(
+            "Restored action has an unknown outcome; check its original status",
+        )),
+        recovery: Vec::new(),
+    });
+    model.action_error = None;
+    if model.ready() {
+        return recover(model, &id, ResourceRecoveryAction::CheckStatus);
+    }
+    render::render()
 }
 
 pub(super) fn recover(
@@ -98,7 +153,18 @@ pub(super) fn recover(
         existing.error = None;
     }
     model.action_error = None;
+    let _was_dirty = model.status_dirty.remove(id);
     dispatch(model, kind)
+}
+
+pub(super) fn invalidate(model: &mut Model) {
+    model.status_dirty.extend(
+        model
+            .mutations
+            .iter()
+            .filter(|mutation| mutation.pending)
+            .map(|mutation| mutation.request.request_id.clone()),
+    );
 }
 
 pub(super) fn reconcile(model: &mut Model) -> ResourceCommand {
@@ -106,9 +172,10 @@ pub(super) fn reconcile(model: &mut Model) -> ResourceCommand {
         .mutations
         .iter()
         .filter(|mutation| {
-            model
-                .recovery(mutation)
-                .contains(&ResourceRecoveryAction::CheckStatus)
+            model.status_dirty.contains(&mutation.request.request_id)
+                && model
+                    .recovery(mutation)
+                    .contains(&ResourceRecoveryAction::CheckStatus)
         })
         .map(|mutation| mutation.request.request_id.clone())
         .collect();
@@ -169,6 +236,9 @@ pub(super) fn complete(
     match result {
         Ok(progress) => {
             let succeeded = progress.stage == ResourceActionStage::Succeeded;
+            if terminal(&progress.stage) {
+                let _was_dirty = model.status_dirty.remove(&request.request_id);
+            }
             if let Some(existing) = model
                 .mutations
                 .iter_mut()
@@ -182,12 +252,12 @@ pub(super) fn complete(
             // Even runtime completion is not a replacement of directory health or
             // model choice; fetch current authoritative facts before enabling work.
             if succeeded {
-                return refresh(model);
+                return refresh(model).and(render::render());
             }
         }
         Err(error) => failed(model, kind, error),
     }
-    render::render()
+    reconcile(model).and(render::render())
 }
 
 fn validate_progress(

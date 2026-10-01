@@ -154,7 +154,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 8u)
+    check(core.protocolVersion() == 9u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -361,6 +361,22 @@ private fun resourceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
     send(client, Event.Resources(ResourceEvent.AdvanceClock(3000uL)))
     check(view(client).resources.controller.assignment == ControllerAssignment.EXPIRED)
     check(view(client).resources.models.single().availability == ResourceAvailability.UNKNOWN)
+
+    AppCore().use { restored ->
+        val restoredLoad = send(restored, Event.Resources(ResourceEvent.Connect(context)))
+            .request(EffectFfi.Resource(ResourceOperation(context, ResourceOperationKind.Snapshot)))
+        respond(restored, restoredLoad, ResourceResponse.Ok(ResourceResult.Snapshot(snapshot)).bincodeSerialize())
+        send(restored, Event.Resources(ResourceEvent.AdvanceClock(2100uL)))
+        val recover = send(restored, Event.Resources(ResourceEvent.Restore(context, identity, mutation)))
+            .request(EffectFfi.Resource(ResourceOperation(context, ResourceOperationKind.Status(identity))))
+        check(view(restored).resources.mutations.single().request == identity)
+        check(view(restored).resources.mutations.single().pending)
+        check(view(restored).resources.mutations.single().progress == null)
+        check(send(restored, Event.Resources(ResourceEvent.Restore(context, identity, mutation))).isEmpty())
+        respond(restored, recover, ResourceResponse.Ok(ResourceResult.Progress(ResourceProgress(context, identity, 2uL, ResourceActionStage.Failed(failure)))).bincodeSerialize())
+        check(!view(restored).resources.mutations.single().pending)
+        check(view(restored).resources.mutations.single().progress?.stage == ResourceActionStage.Failed(failure))
+    }
 }
 
 fun main() {
@@ -382,5 +398,5 @@ fun main() {
     println("Kotlin/JVM subscription join + snapshot + stale watch PASS")
     println("Kotlin/JVM session attribution + receipt + runtime completion + expiry in both modes PASS")
     println("Kotlin/JVM projection inputs + references + freshness + filtering PASS")
-    println("Kotlin/JVM resource actions + progress + controller epochs/expiry in both modes PASS")
+    println("Kotlin/JVM resource actions + progress + restoration + controller epochs/expiry in both modes PASS")
 }
