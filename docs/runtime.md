@@ -64,8 +64,9 @@ Use distinct Rust names for reflected domain event enums, then re-export them as
 `HistoryEvent` and `WorkspaceEvent` and verify their generated event/result
 codecs in both native smoke tests.
 
-See [history integration](history.md) for engine query execution and evidence
-models. Rust hosts resolve boxed history requests with `request.as_mut()`.
+See [history integration](history.md) for engine queries, operation records,
+content and file comparisons. Rust hosts resolve boxed history requests with
+`request.as_mut()`.
 
 See [workspace integration](workspace.md) for both coordination modes,
 repository-to-chain bindings, member/presence views and navigation. Hosts resolve

@@ -246,7 +246,7 @@ fn search_navigation_retains_full_identity_and_wraps_without_row_coordinates() {
     assert_eq!(
         requests.len(),
         2,
-        "navigation requests item context and exact evidence"
+        "navigation requests item context, stored records and field content"
     );
     let view = core.view().history;
     assert_eq!(view.search.cursor, Some(0), "single match wraps");

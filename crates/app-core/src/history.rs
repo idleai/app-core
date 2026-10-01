@@ -1,7 +1,7 @@
 //! Shared semantic history state. Owner: f23/history-state.
 //!
 //! Item keys identify logical objects; observation and record references identify
-//! evidence. Hosts execute [`Query`] through engine adapters and return results
+//! stored operation bytes. Hosts execute [`Query`] through engine adapters and return results
 //! through Crux continuations. No row coordinates, scrolling, DOM or graph layout
 //! are part of this module. Query cursors describe bounded scans, not subscriptions.
 

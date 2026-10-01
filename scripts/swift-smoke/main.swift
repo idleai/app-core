@@ -84,6 +84,16 @@ check(try view(core).history.paging.exhausted)
 check(try view(other).history.chain == nil)
 print("Swift history event -> engine-query effect -> typed page PASS")
 
+let missingOperation = String(repeating: "a", count: 64)
+let detailEffects = try send(core, .history(.loadOperationDetails(operation: missingOperation, refresh: false)))
+let detailID = try request(detailEffects, .history(Query(chain: "chain", action: .operationDetails(operation: missingOperation))))
+let details = OperationDetails(operation: missingOperation, status: .missing,
+                               observation: nil, records: [], fields: [], comparison: nil)
+let detailResponse = QueryResponse.ok(.operationDetails(details))
+_ = try core.handleResponse(id: detailID, response: Data(detailResponse.bincodeSerialize()))
+check(try view(core).history.operationDetails.first?.state == .ready(details))
+print("Swift operation records/content request -> result PASS")
+
 func workspaceSmoke(_ mode: WorkspaceMode) throws {
     let client = AppCore()
     let listID = try request(send(client, .workspace(.load)), .workspace(.list))

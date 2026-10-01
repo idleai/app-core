@@ -1,5 +1,5 @@
 //! Compatibility previews extracted from the old node viewer.
-//! These functions are lossy presentation only; exact evidence uses engine queries.
+//! These functions produce previews; engine queries return full records and content.
 
 use editchain_core::{Op, OpKind, Payload};
 

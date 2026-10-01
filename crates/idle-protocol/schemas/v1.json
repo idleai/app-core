@@ -1227,7 +1227,7 @@
           ]
         },
         {
-          "description": "Session directory binding changed; not runtime execution evidence.",
+          "description": "Session directory binding changed; this does not confirm runtime execution.",
           "type": "object",
           "properties": {
             "data": {
@@ -3501,7 +3501,7 @@
       ]
     },
     "RuntimeSubmission": {
-      "description": "Direct or forwarded runtime submission, retaining the original request context.\n\nForwarders extract the unchanged `SubmitInput` body from the coordination\ncommand. Evo deduplicates its semantic input, context and fence using the same\nrequest key. A receipt is evidence only over an authenticated delegation\nchannel, and its key must match `context.key()`.",
+      "description": "Direct or forwarded runtime submission, retaining the original request context.\n\nForwarders extract the unchanged `SubmitInput` body from the coordination\ncommand. Evo deduplicates its semantic input, context and fence using the same\nrequest key. Recipients must authenticate the delegation channel before\ntrusting a forwarded receipt, and its key must match `context.key()`.",
       "type": "object",
       "properties": {
         "api_version": {

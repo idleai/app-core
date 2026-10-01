@@ -39,7 +39,7 @@ pub struct ViewModel {
     pub initialized: bool,
     /// Loading, error or host information from the bootstrap reducer.
     pub bootstrap: bootstrap::ViewModel,
-    /// Shared history interaction and exact evidence state.
+    /// Shared history interaction, stored records and field content.
     pub history: history::ViewModel,
     /// Shared workspace/repository navigation, members and presence.
     pub workspace: workspace::ViewModel,

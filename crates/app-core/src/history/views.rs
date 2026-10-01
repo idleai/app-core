@@ -2,7 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{ActivityKind, ContentText, Evidence, FieldEvidence, Filter, MatchRange, RecordRef};
+use super::{
+    ActivityKind, ContentText, FieldContent, Filter, MatchRange, OperationDetails, RecordRef,
+};
 use crate::module::EffectError;
 
 /// Request state preserves already loaded data during paging and retry.
@@ -37,7 +39,7 @@ pub struct Paging {
     pub exhausted: bool,
 }
 
-/// Logical selection with a separately chosen observation for evidence.
+/// Logical selection with an optional operation ID for inspecting its stored bytes.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -74,8 +76,8 @@ pub struct ViewModel {
     pub paging: Paging,
     /// Independent search session and cursor.
     pub search: SearchView,
-    /// All cached evidence states, keyed by observation identity.
-    pub evidence: Vec<EvidenceView>,
+    /// Cached record/content lookups, keyed by operation ID.
+    pub operation_details: Vec<OperationDetailsView>,
     /// Most recent native-open action status.
     pub open: RequestState,
     /// Bounded cache status; evicted observations can be loaded again by item.
@@ -114,7 +116,7 @@ pub struct ItemView {
     pub paging: Paging,
 }
 
-/// One observation's recorded attribution, causal links and evidence identity.
+/// One observation's author, recorder, causal links and stored-record reference.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -143,7 +145,7 @@ pub struct ObservationView {
     pub parents: Vec<String>,
     /// Logical causes remain distinct from physical parents and Links.
     pub causes: Vec<String>,
-    /// Original evidence observation referenced by a converter.
+    /// Original input operation referenced by a converter.
     pub original: Option<String>,
     /// Converter identity retained when an Original is referenced.
     pub converter: Option<String>,
@@ -151,13 +153,13 @@ pub struct ObservationView {
     pub legacy: Option<String>,
     /// Typed data needed by message, tool, revision and graph detail surfaces.
     pub detail: Detail,
-    /// Explicitly bounded display preview, never the complete evidence contract.
+    /// Display preview with an explicit size limit; full content is loaded separately.
     pub preview: Option<ContentText>,
-    /// Invalid, missing or quarantined evidence associated with this observation.
+    /// Invalid, missing or quarantined records associated with this observation.
     pub problem: Option<String>,
 }
 
-/// Kind-specific semantics; full unmodified metadata remains in evidence.
+/// Kind-specific display fields; full metadata remains in the stored operation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
 pub enum Detail {
@@ -282,12 +284,12 @@ pub struct SearchView {
     /// Match order supplied by the engine.
     pub matches: Vec<MatchView>,
     /// Unsearched fields prevent a false claim of complete absence.
-    pub unavailable: Vec<FieldEvidence>,
+    pub unavailable: Vec<FieldContent>,
     /// Index into matches, with no implied rendered row position.
     pub cursor: Option<u32>,
 }
 
-/// One search destination identified by logical object and exact evidence.
+/// One search destination identified by logical object and stored-record reference.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -302,30 +304,30 @@ pub struct MatchView {
     pub fields: Vec<MatchRange>,
 }
 
-/// Cached on-demand evidence, independently retryable.
+/// Cached record/content lookup for one operation, independently retryable.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
     reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
 )]
-pub struct EvidenceView {
+pub struct OperationDetailsView {
     /// Full requested observation ID.
     pub operation: String,
-    /// Loading/error/evidence state.
-    pub state: EvidenceState,
+    /// Loading status, error or the operation's records and content.
+    pub state: OperationDetailsState,
 }
 
-/// Evidence request state with concrete generated native payload codecs.
+/// Record/content request state with generated native payload codecs.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
-pub enum EvidenceState {
+pub enum OperationDetailsState {
     /// No request has run.
     #[default]
     Idle,
-    /// Awaiting host evidence.
+    /// Awaiting records and content from the host.
     Loading,
-    /// Exact evidence, including missing or quarantined records.
-    Ready(Evidence),
+    /// Stored records and content, including missing or quarantined records.
+    Ready(OperationDetails),
     /// Presentable host error, available for retry.
     Failed(EffectError),
 }

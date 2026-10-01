@@ -4,16 +4,16 @@ use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    EvidenceState, EvidenceStatus, EvidenceView, Filter, HistoryPage, MatchView, Model, OpenTarget,
-    Page, Paging, Query, QueryAction, QueryOutput, QueryResult, RecordRef, RequestState,
-    SearchView, Selected, ViewModel, cache,
+    Filter, HistoryPage, MatchView, Model, OpenTarget, OperationDetailsState, OperationDetailsView,
+    Page, Paging, Query, QueryAction, QueryOutput, QueryResult, RecordLookupStatus, RecordRef,
+    RequestState, SearchView, Selected, ViewModel, cache,
 };
 use crate::{effects::Effect, module::EffectError};
 
 use HistoryEvent as Event;
 
 type HistoryCommand = Command<Effect, Event>;
-const MAX_CACHED_EVIDENCE: usize = 64;
+const MAX_CACHED_OPERATION_DETAILS: usize = 64;
 
 /// Client history actions, with results accepted only through Crux continuations.
 #[derive(Clone, Debug, Deserialize, Serialize, facet::Facet)]
@@ -33,7 +33,7 @@ pub enum HistoryEvent {
     SearchMore,
     /// Move the match cursor with wrapping, selecting the stable destination.
     NavigateMatch(i32),
-    /// Select a logical object and optionally a particular evidence observation.
+    /// Select a logical object and optionally one of its recorded operations.
     Select(Selected),
     /// Clear selection without discarding cached observations.
     ClearSelection,
@@ -41,16 +41,16 @@ pub enum HistoryEvent {
     ToggleDisclosure(String),
     /// Continue or retry the bounded scan of all observations for an item.
     LoadItem(String),
-    /// Load cached evidence, retry a failure, or explicitly refresh late content.
-    LoadEvidence {
+    /// Load an operation's records/content, retry a failure, or refresh late content.
+    LoadOperationDetails {
         /// Full observation identity.
         operation: String,
-        /// Refresh even when evidence is already cached.
+        /// Refresh even when the operation's records/content are already cached.
         refresh: bool,
     },
     /// Re-scan from the beginning, retaining selection and disclosure identities.
     Refresh,
-    /// Request a host-native action using an exact evidence reference.
+    /// Request a host-native action using an operation ID and stored-record digest.
     Open {
         /// Retained record identity.
         record: RecordRef,
@@ -128,7 +128,9 @@ impl App for History {
                 load_item(model, item).and(render::render())
             }
             Event::LoadItem(item) => load_item(model, item),
-            Event::LoadEvidence { operation, refresh } => load_evidence(model, operation, refresh),
+            Event::LoadOperationDetails { operation, refresh } => {
+                load_operation_details(model, operation, refresh)
+            }
             Event::Refresh => refresh(model),
             Event::Open { record, target } => {
                 if model.chain.is_none() {
@@ -139,7 +141,7 @@ impl App for History {
                     || cache::full_id(&record.hash).is_err()
                 {
                     model.open = RequestState::Failed(cache::error(
-                        "Native action requires complete evidence identity",
+                        "Native action requires a full operation ID and record digest",
                     ));
                     return render::render();
                 }
@@ -171,10 +173,10 @@ impl App for History {
                 .and_then(|key| model.cache.item(key, model)),
             paging: model.paging.clone(),
             search: model.search.clone(),
-            evidence: model
-                .evidence
+            operation_details: model
+                .operation_details
                 .iter()
-                .map(|(operation, state)| EvidenceView {
+                .map(|(operation, state)| OperationDetailsView {
                     operation: operation.clone(),
                     state: state.clone(),
                 })
@@ -280,31 +282,31 @@ fn load_item(model: &mut Model, item: String) -> HistoryCommand {
     request(model, QueryAction::Item { item, page })
 }
 
-fn load_evidence(model: &mut Model, operation: String, refresh: bool) -> HistoryCommand {
+fn load_operation_details(model: &mut Model, operation: String, refresh: bool) -> HistoryCommand {
     if model.chain.is_none() {
         return Command::done();
     }
     if !refresh
         && matches!(
-            model.evidence.get(&operation),
-            Some(EvidenceState::Ready(_) | EvidenceState::Loading)
+            model.operation_details.get(&operation),
+            Some(OperationDetailsState::Ready(_) | OperationDetailsState::Loading)
         )
     {
         return Command::done();
     }
-    model.pending.retain(|_, action| !matches!(action, QueryAction::Evidence { operation: pending } if *pending == operation));
+    model.pending.retain(|_, action| !matches!(action, QueryAction::OperationDetails { operation: pending } if *pending == operation));
     if let Err(error) = cache::full_id(&operation) {
         let _previous = model
-            .evidence
-            .insert(operation, EvidenceState::Failed(error));
+            .operation_details
+            .insert(operation, OperationDetailsState::Failed(error));
         return render::render();
     }
     let _previous = model
-        .evidence
-        .insert(operation.clone(), EvidenceState::Loading);
-    model.evidence_order.retain(|id| *id != operation);
-    model.evidence_order.push(operation.clone());
-    request(model, QueryAction::Evidence { operation })
+        .operation_details
+        .insert(operation.clone(), OperationDetailsState::Loading);
+    model.operation_details_order.retain(|id| *id != operation);
+    model.operation_details_order.push(operation.clone());
+    request(model, QueryAction::OperationDetails { operation })
 }
 
 fn restart_scans(model: &mut Model) -> HistoryCommand {
@@ -330,8 +332,8 @@ fn refresh(model: &mut Model) -> HistoryCommand {
     // cursors and multi-page snapshot consistency are the subscription owner's job.
     model.pending.clear();
     model.cache = cache::Cache::default();
-    model.evidence.clear();
-    model.evidence_order.clear();
+    model.operation_details.clear();
+    model.operation_details_order.clear();
     model.item_pages.clear();
     model.open = RequestState::Idle;
     let mut command = restart_scans(model);
@@ -339,7 +341,7 @@ fn refresh(model: &mut Model) -> HistoryCommand {
         command = command.and(load_item(model, item));
     }
     if let Some(operation) = model.selected.observation.clone() {
-        command = command.and(load_evidence(model, operation, false));
+        command = command.and(load_operation_details(model, operation, false));
     }
     command
 }
@@ -370,7 +372,7 @@ fn select(model: &mut Model, selected: Selected) -> HistoryCommand {
         command = command.and(load_item(model, item));
     }
     if let Some(operation) = model.selected.observation.clone() {
-        command = command.and(load_evidence(model, operation, false));
+        command = command.and(load_operation_details(model, operation, false));
     }
     command
 }
@@ -425,7 +427,7 @@ fn complete(model: &mut Model, id: u64, result: QueryOutput) -> HistoryCommand {
     for item in evicted {
         let _old = model.item_pages.remove(&item);
     }
-    prune_evidence(model);
+    prune_operation_details(model);
     render::render()
 }
 
@@ -459,7 +461,9 @@ fn validate_page(request: &Page, scanned: u32, cursor: Option<&str>) -> Result<(
 fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), EffectError> {
     let request = match action {
         QueryAction::History { page, .. } | QueryAction::Item { page, .. } => page,
-        QueryAction::Search { .. } | QueryAction::Evidence { .. } | QueryAction::Open { .. } => {
+        QueryAction::Search { .. }
+        | QueryAction::OperationDetails { .. }
+        | QueryAction::Open { .. } => {
             return Err(cache::error("Wrong history response type"));
         }
     };
@@ -487,7 +491,7 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
             QueryAction::History { filter, .. } => filter.matches(&op),
             QueryAction::Item { item, .. } => value.item_key()? == *item,
             QueryAction::Search { .. }
-            | QueryAction::Evidence { .. }
+            | QueryAction::OperationDetails { .. }
             | QueryAction::Open { .. } => false,
         };
         if !matches {
@@ -511,7 +515,7 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
                 QueryAction::Item { item, .. } => model.item_pages.entry(item.clone()).or_default(),
                 QueryAction::History { .. } => &mut model.paging,
                 QueryAction::Search { .. }
-                | QueryAction::Evidence { .. }
+                | QueryAction::OperationDetails { .. }
                 | QueryAction::Open { .. } => return Err(cache::error("Wrong history request")),
             };
             settle(paging, result.scanned, result.next_after);
@@ -570,21 +574,22 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
             }
             settle(&mut model.search.paging, result.scanned, result.next_after);
         }
-        (QueryAction::Evidence { operation }, QueryResult::Evidence(result))
+        (QueryAction::OperationDetails { operation }, QueryResult::OperationDetails(result))
             if *operation == result.operation =>
         {
             for record in &result.records {
                 let _hash = cache::full_id(&record.record.hash)?;
                 if record.record.operation != *operation {
-                    return Err(cache::error("Evidence contains a different observation"));
+                    return Err(cache::error(
+                        "Returned record contains a different operation ID",
+                    ));
                 }
             }
             match result.status {
-                EvidenceStatus::Found => {
-                    let observation = result
-                        .observation
-                        .as_ref()
-                        .ok_or_else(|| cache::error("Evidence lacks its accepted observation"))?;
+                RecordLookupStatus::Found => {
+                    let observation = result.observation.as_ref().ok_or_else(|| {
+                        cache::error("Lookup result lacks its accepted operation")
+                    })?;
                     if observation.record.operation != *operation
                         || result.records.len() != 1
                         || result
@@ -597,26 +602,27 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
                             .any(|record| record.record == observation.record)
                     {
                         return Err(cache::error(
-                            "Evidence lacks its exact recorded representation",
+                            "Lookup result lacks the operation's original stored bytes",
                         ));
                     }
                     let _key = model.cache.insert(observation.clone())?;
                 }
-                EvidenceStatus::Missing | EvidenceStatus::Conflicted => {
+                RecordLookupStatus::Missing | RecordLookupStatus::Conflicted => {
                     if result.observation.is_some()
                         || !result.fields.is_empty()
                         || result.comparison.is_some()
-                        || (result.status == EvidenceStatus::Missing && !result.records.is_empty())
-                        || (result.status == EvidenceStatus::Conflicted
+                        || (result.status == RecordLookupStatus::Missing
+                            && !result.records.is_empty())
+                        || (result.status == RecordLookupStatus::Conflicted
                             && result.records.is_empty())
                     {
                         return Err(cache::error(
-                            "Unavailable evidence cannot contain accepted facts",
+                            "Missing or conflicted operations cannot contain an accepted record or resolved content",
                         ));
                     }
                     model
                         .cache
-                        .mark_unavailable(operation, result.status == EvidenceStatus::Missing);
+                        .mark_unavailable(operation, result.status == RecordLookupStatus::Missing);
                     // Previously matched representations are no longer accepted facts.
                     model
                         .search
@@ -626,8 +632,8 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
                 }
             }
             let _old = model
-                .evidence
-                .insert(operation.clone(), EvidenceState::Ready(result));
+                .operation_details
+                .insert(operation.clone(), OperationDetailsState::Ready(result));
         }
         (QueryAction::Open { .. }, QueryResult::Opened) => model.open = RequestState::Ready,
         _ => {
@@ -646,25 +652,31 @@ fn fail(model: &mut Model, action: &QueryAction, error: EffectError) {
         QueryAction::Item { item, .. } => {
             model.item_pages.entry(item.clone()).or_default().state = RequestState::Failed(error);
         }
-        QueryAction::Evidence { operation } => {
+        QueryAction::OperationDetails { operation } => {
             let _old = model
-                .evidence
-                .insert(operation.clone(), EvidenceState::Failed(error));
+                .operation_details
+                .insert(operation.clone(), OperationDetailsState::Failed(error));
         }
         QueryAction::Open { .. } => model.open = RequestState::Failed(error),
     }
 }
 
-fn prune_evidence(model: &mut Model) {
-    let mut remove = model.evidence.len().saturating_sub(MAX_CACHED_EVIDENCE);
-    model.evidence_order.retain(|operation| {
+fn prune_operation_details(model: &mut Model) {
+    let mut remove = model
+        .operation_details
+        .len()
+        .saturating_sub(MAX_CACHED_OPERATION_DETAILS);
+    model.operation_details_order.retain(|operation| {
         if remove == 0
             || model.selected.observation.as_ref() == Some(operation)
-            || matches!(model.evidence.get(operation), Some(EvidenceState::Loading))
+            || matches!(
+                model.operation_details.get(operation),
+                Some(OperationDetailsState::Loading)
+            )
         {
             return true;
         }
-        let _removed = model.evidence.remove(operation);
+        let _removed = model.operation_details.remove(operation);
         remove = remove.saturating_sub(1);
         false
     });

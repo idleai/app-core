@@ -9,8 +9,9 @@ use super::{first, id, message, send};
 use crate::{
     Core,
     history::{
-        self, BlockState, Comparison, Event, Evidence, EvidenceState, EvidenceStatus,
-        EvidenceValue, Filter, Query, QueryAction, QueryResult, RequestState, Selected,
+        self, BlockState, Comparison, ContentValue, Event, Filter, OperationDetails,
+        OperationDetailsState, Query, QueryAction, QueryResult, RecordLookupStatus, RequestState,
+        Selected,
     },
 };
 
@@ -25,20 +26,20 @@ fn run(core: &Core, queries: &mut ChainQueries, event: Event) {
     }
 }
 
-fn evidence(core: &Core, operation: u8) -> Evidence {
+fn operation_details(core: &Core, operation: u8) -> OperationDetails {
     let entry = core
         .view()
         .history
-        .evidence
+        .operation_details
         .into_iter()
         .find(|value| value.operation == id(operation).to_string())
-        .expect("cached evidence");
-    if let EvidenceState::Ready(value) = entry.state {
+        .expect("cached operation details");
+    if let OperationDetailsState::Ready(value) = entry.state {
         Some(value)
     } else {
         None
     }
-    .expect("ready evidence")
+    .expect("loaded operation records and content")
 }
 
 #[test]
@@ -128,10 +129,10 @@ fn native_engine_pages_searches_and_replays_mixed_legacy_and_activity_history() 
 }
 
 #[test]
-fn late_blobs_exact_originals_binary_empty_and_missing_evidence_remain_distinct() {
+fn late_blobs_original_input_and_empty_or_missing_content_remain_distinct() {
     let directory = tempfile::tempdir().expect("temporary chain");
     let engine = Engine::open(directory.path()).expect("open engine");
-    let late_bytes = b"late evidence\0\xff\r\n";
+    let late_bytes = b"late contents\0\xff\r\n";
     // Obtain a real content address from a different chain, without storing it here.
     let other = tempfile::tempdir().expect("blob source");
     let source = Engine::open(other.path()).expect("source engine");
@@ -173,17 +174,17 @@ fn late_blobs_exact_originals_binary_empty_and_missing_evidence_remain_distinct(
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(1).to_string(),
             refresh: false,
         },
     );
-    let before = evidence(&core, 1);
+    let before = operation_details(&core, 1);
     assert!(
         before
             .fields
             .iter()
-            .any(|field| field.value == EvidenceValue::Missing),
+            .any(|field| field.value == ContentValue::Missing),
         "blob gap is explicit"
     );
     run(&core, &mut queries, Event::Search("late".into()));
@@ -199,12 +200,12 @@ fn late_blobs_exact_originals_binary_empty_and_missing_evidence_remain_distinct(
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(1).to_string(),
             refresh: true,
         },
     );
-    let after = evidence(&core, 1);
+    let after = operation_details(&core, 1);
     assert_eq!(
         before.observation, after.observation,
         "content arrival does not change identity"
@@ -213,56 +214,56 @@ fn late_blobs_exact_originals_binary_empty_and_missing_evidence_remain_distinct(
         after
             .fields
             .iter()
-            .any(|field| field.value == EvidenceValue::Available(late_bytes.to_vec())),
+            .any(|field| field.value == ContentValue::Available(late_bytes.to_vec())),
         "binary content is exact"
     );
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(2).to_string(),
             refresh: false,
         },
     );
-    let raw = evidence(&core, 2);
+    let raw = operation_details(&core, 2);
     assert!(
         raw.fields
             .iter()
-            .any(|field| field.value == EvidenceValue::Available(original_bytes.to_vec())),
+            .any(|field| field.value == ContentValue::Available(original_bytes.to_vec())),
         "Original bytes preserve whitespace and non-UTF8"
     );
     let retained = queries.record_variants(id(2)).expect("retained bytes");
     assert_eq!(
         raw.records.first().expect("original encoding").bytes,
         retained.first().expect("engine encoding").encoded,
-        "raw evidence is stored encoding, not JSON reserialization"
+        "raw record bytes preserve the stored encoding without JSON reserialization"
     );
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(3).to_string(),
             refresh: false,
         },
     );
     assert!(
-        evidence(&core, 3)
+        operation_details(&core, 3)
             .fields
             .iter()
-            .any(|field| field.value == EvidenceValue::Available(Vec::new())),
+            .any(|field| field.value == ContentValue::Available(Vec::new())),
         "empty bytes are available"
     );
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(99).to_string(),
             refresh: false,
         },
     );
     assert_eq!(
-        evidence(&core, 99).status,
-        EvidenceStatus::Missing,
+        operation_details(&core, 99).status,
+        RecordLookupStatus::Missing,
         "missing observation differs from empty content"
     );
 }
@@ -291,20 +292,24 @@ fn quarantined_observations_retract_replayed_content_without_losing_selection() 
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(1).to_string(),
             refresh: true,
         },
     );
-    let evidence = evidence(&core, 1);
+    let operation_details = operation_details(&core, 1);
     assert_eq!(
-        evidence.status,
-        EvidenceStatus::Conflicted,
+        operation_details.status,
+        RecordLookupStatus::Conflicted,
         "quarantine is explicit"
     );
-    assert_eq!(evidence.records.len(), 2, "both exact variants retained");
+    assert_eq!(
+        operation_details.records.len(),
+        2,
+        "both exact variants retained"
+    );
     assert!(
-        evidence.observation.is_none(),
+        operation_details.observation.is_none(),
         "no canonical variant invented"
     );
     let selected = core
@@ -328,7 +333,7 @@ fn quarantined_observations_retract_replayed_content_without_losing_selection() 
         selected
             .observations
             .first()
-            .expect("evidence anchor")
+            .expect("record anchor")
             .preview
             .is_none(),
         "quarantined preview is retracted"
@@ -364,17 +369,25 @@ fn file_diff_uses_recorded_snapshots_and_native_actions_need_a_host_capability()
     run(
         &core,
         &mut queries,
-        Event::LoadEvidence {
+        Event::LoadOperationDetails {
             operation: id(1).to_string(),
             refresh: false,
         },
     );
-    let evidence = evidence(&core, 1);
+    let operation_details = operation_details(&core, 1);
     assert!(
-        matches!(evidence.comparison, Some(Comparison::Changed { .. })),
+        matches!(
+            operation_details.comparison,
+            Some(Comparison::Changed { .. })
+        ),
         "engine supplies exact byte comparison"
     );
-    let record = evidence.records.first().expect("record").record.clone();
+    let record = operation_details
+        .records
+        .first()
+        .expect("record")
+        .record
+        .clone();
     let mut open = first(send(
         &core,
         Event::Open {
@@ -397,7 +410,7 @@ fn file_diff_uses_recorded_snapshots_and_native_actions_need_a_host_capability()
         "other",
         &Query {
             chain: "chain".into(),
-            action: QueryAction::Evidence {
+            action: QueryAction::OperationDetails {
                 operation: id(1).to_string(),
             },
         },
@@ -420,33 +433,33 @@ fn adapter_rejects_short_ids_and_exposes_complete_contents_query() {
             "chain",
             &Query {
                 chain: "chain".into(),
-                action: QueryAction::Evidence {
+                action: QueryAction::OperationDetails {
                     operation: "0101".into()
                 }
             }
         )
         .is_err(),
-        "prefixes are not persisted as evidence identities"
+        "record references retain complete operation IDs"
     );
     let result = history::engine::execute(
         &mut queries,
         "chain",
         &Query {
             chain: "chain".into(),
-            action: QueryAction::Evidence {
+            action: QueryAction::OperationDetails {
                 operation: id(1).to_string(),
             },
         },
     )
-    .expect("exact evidence");
-    let evidence = if let QueryResult::Evidence(evidence) = result {
-        Some(evidence)
+    .expect("operation records and content");
+    let operation_details = if let QueryResult::OperationDetails(operation_details) = result {
+        Some(operation_details)
     } else {
         None
     }
-    .expect("evidence result");
+    .expect("operation lookup result");
     assert_eq!(
-        evidence.fields.len(),
+        operation_details.fields.len(),
         2,
         "all message fields, including MIME, are returned"
     );

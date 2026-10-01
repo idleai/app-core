@@ -7,7 +7,7 @@ pub const MAX_ROW_TEXT_BYTES: usize = 4096;
 /// Maximum UTF-8 bytes in a displayed tool label.
 pub const MAX_TOOL_LABEL_BYTES: usize = 256;
 
-/// Text selected from source evidence, with explicit completeness.
+/// Text read from a recorded field, with explicit completeness.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -17,7 +17,8 @@ pub struct ContentText {
     /// Plain or authored Markdown text, without a provider JSON envelope.
     pub text: String,
     /// True only when the complete source text survived preparation and this
-    /// field's byte limit. Derived summaries and unknown provenance use false.
+    /// field's byte limit. Derived summaries and text without a known source
+    /// field use false.
     #[serde(default)]
     pub complete: bool,
 }
@@ -61,7 +62,7 @@ impl ContentText {
     reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
 )]
 pub struct RowContent {
-    /// Concrete tool name from normalized source evidence.
+    /// Tool name read from the recorded tool call.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_label: Option<ContentText>,
     /// Authored prose, invocation, or aggregate activity summary.

@@ -1,4 +1,4 @@
-//! Exercise Crux continuations against real engine queries and retained evidence.
+//! Exercise Crux continuations against real engine queries and stored records.
 
 #[cfg(not(target_arch = "wasm32"))]
 mod engine_cases;

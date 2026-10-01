@@ -27,7 +27,7 @@ and views alongside semantic history. Hosts must regenerate their bindings and
 use the generated codecs.
 
 The [history integration guide](docs/history.md) covers stable selection, literal
-search, filters, disclosure, paging, cached evidence and immutable content replay.
+search, filters, disclosure, paging, cached operation records and content replay.
 Rust native hosts can execute its effects through `history::engine::execute`;
 WASM hosts use the same portable requests through their own engine connection.
 `idle-history` holds the small portable contracts still consumed by the legacy

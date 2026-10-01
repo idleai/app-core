@@ -8,8 +8,8 @@ use editchain_core::{
 };
 
 use super::{
-    ActivityKind, BlockState, BlockView, CacheStatus, ContentText, Detail, Endpoint, EvidenceState,
-    EvidenceValue, Filter, ItemView, Model, Observation, ObservationView, Paging,
+    ActivityKind, BlockState, BlockView, CacheStatus, ContentText, ContentValue, Detail, Endpoint,
+    Filter, ItemView, Model, Observation, ObservationView, OperationDetailsState, Paging,
 };
 use crate::module::EffectError;
 
@@ -60,7 +60,7 @@ impl Observation {
             .map_err(|failure| error(&format!("Invalid operation: {failure}")))?;
         if op.id != id {
             return Err(error(
-                "Observation identity differs from its evidence reference",
+                "Operation ID differs from its stored-record reference",
             ));
         }
         if let OpKind::Activity(activity) = &op.kind {
@@ -422,15 +422,15 @@ fn resolve(payload: &Payload, model: &Model) -> Option<Vec<u8>> {
         Payload::Inline(bytes) => Some(bytes.clone()),
         Payload::Blob(reference) => {
             let id = serde_json::to_string(&reference.id).ok()?;
-            model.evidence.values().find_map(|state| {
-                let EvidenceState::Ready(evidence) = state else {
+            model.operation_details.values().find_map(|state| {
+                let OperationDetailsState::Ready(operation_details) = state else {
                     return None;
                 };
-                evidence.fields.iter().find_map(|field| {
+                operation_details.fields.iter().find_map(|field| {
                     if field.content_id.as_ref() != Some(&id) {
                         return None;
                     }
-                    let EvidenceValue::Available(bytes) = &field.value else {
+                    let ContentValue::Available(bytes) = &field.value else {
                         return None;
                     };
                     (usize::try_from(reference.len).ok() == Some(bytes.len()))

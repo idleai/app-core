@@ -3,7 +3,10 @@ use crux_core::bridge::FfiFormat;
 use crate::{
     Event, Shell,
     effects::EffectFfi,
-    history::{self, HistoryPage, QueryResponse, QueryResult},
+    history::{
+        self, HistoryPage, OperationDetails, QueryAction, QueryResponse, QueryResult,
+        RecordLookupStatus,
+    },
     shell::{EffectBatch, PROTOCOL_VERSION, ShellFormat},
 };
 
@@ -73,5 +76,53 @@ fn client_cannot_serialize_an_internal_history_completion() {
     assert!(
         ShellFormat::serialize(&mut buffer, &event).is_err(),
         "only pending effect continuations admit results"
+    );
+}
+
+#[test]
+fn operation_detail_names_preserve_protocol_v4_binary_layout() {
+    assert_eq!(
+        PROTOCOL_VERSION, 4,
+        "name changes preserve the shell wire version"
+    );
+    let event = Event::History(history::Event::LoadOperationDetails {
+        operation: "op".into(),
+        refresh: true,
+    });
+    assert_eq!(
+        bytes(&event),
+        b"\x02\0\0\0\x0b\0\0\0\x02\0\0\0\0\0\0\0op\x01",
+        "the history route, load action, operation ID and refresh flag keep their encoding"
+    );
+    assert_eq!(
+        bytes(&QueryAction::OperationDetails {
+            operation: "op".into()
+        }),
+        b"\x03\0\0\0\x02\0\0\0\0\0\0\0op",
+        "the host lookup keeps its operation discriminant"
+    );
+    let response = QueryResponse::Ok(QueryResult::OperationDetails(OperationDetails {
+        operation: "op".into(),
+        status: RecordLookupStatus::Missing,
+        observation: None,
+        records: Vec::new(),
+        fields: Vec::new(),
+        comparison: None,
+    }));
+    let expected = [
+        b"\0\0\0\0".as_slice(),  // successful response
+        b"\x02\0\0\0",           // operation lookup result
+        b"\x02\0\0\0\0\0\0\0op", // operation ID
+        b"\x01\0\0\0",           // missing record
+        b"\0",                   // absent accepted operation
+        &[0; 8],                 // zero raw records
+        &[0; 8],                 // zero content fields
+        b"\0",                   // absent file comparison
+    ]
+    .concat();
+    assert_eq!(
+        bytes(&response),
+        expected,
+        "result field order and enum discriminants remain stable"
     );
 }

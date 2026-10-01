@@ -11,9 +11,9 @@ use editchain_core::{OpId, activity::Operation};
 use editchain_engine::queries::{self, ChainQueries, Lookup};
 
 use super::{
-    Comparison, Evidence, EvidenceStatus, EvidenceValue, FieldEvidence, Filter, HistoryPage,
-    MatchRange, Observation, Page, Query, QueryAction, QueryOutput, QueryResult, RawRecord,
-    RecordRef, SearchMatch, SearchPage, cache,
+    Comparison, ContentValue, FieldContent, Filter, HistoryPage, MatchRange, Observation,
+    OperationDetails, Page, Query, QueryAction, QueryOutput, QueryResult, RawRecord,
+    RecordLookupStatus, RecordRef, SearchMatch, SearchPage, cache,
 };
 
 /// Execute a read against the host's explicitly resolved chain.
@@ -21,7 +21,7 @@ use super::{
 ///
 /// # Errors
 /// Returns presentable errors for a mismatched chain, invalid identities/pages,
-/// unavailable host actions, engine I/O, or an inconsistent evidence lookup.
+/// unavailable host actions, engine I/O, or an inconsistent record/content lookup.
 pub fn execute(queries: &mut ChainQueries, chain: &str, query: &Query) -> QueryOutput {
     if chain != query.chain {
         return Err(cache::error("History query belongs to a different chain"));
@@ -72,8 +72,8 @@ fn execute_read(queries: &ChainQueries, action: &QueryAction) -> io::Result<Quer
             filter,
             page: request,
         } => search(queries, text, filter, request).map(QueryResult::Search),
-        QueryAction::Evidence { operation } => {
-            evidence(queries, id(operation)?).map(QueryResult::Evidence)
+        QueryAction::OperationDetails { operation } => {
+            operation_details(queries, id(operation)?).map(QueryResult::OperationDetails)
         }
         QueryAction::Open { .. } => Err(io::Error::new(
             io::ErrorKind::Unsupported,
@@ -116,8 +116,8 @@ fn observation(value: &queries::HistoryEntry) -> io::Result<Observation> {
     })
 }
 
-fn field(value: queries::ContentResult) -> io::Result<FieldEvidence> {
-    Ok(FieldEvidence {
+fn field(value: queries::ContentResult) -> io::Result<FieldContent> {
+    Ok(FieldContent {
         record: reference(value.record_ref),
         field: serde_json::to_string(&value.field).map_err(io::Error::other)?,
         content_id: value
@@ -127,11 +127,11 @@ fn field(value: queries::ContentResult) -> io::Result<FieldEvidence> {
             .map_err(io::Error::other)?,
         declared_length: value.reference.and_then(|reference| reference.len),
         value: match value.value {
-            queries::ContentValue::Available(bytes) => EvidenceValue::Available(bytes),
-            queries::ContentValue::NotRecorded => EvidenceValue::NotRecorded,
-            queries::ContentValue::Missing => EvidenceValue::Missing,
-            queries::ContentValue::Corrupt => EvidenceValue::Corrupt,
-            queries::ContentValue::Unresolvable => EvidenceValue::Unresolvable,
+            queries::ContentValue::Available(bytes) => ContentValue::Available(bytes),
+            queries::ContentValue::NotRecorded => ContentValue::NotRecorded,
+            queries::ContentValue::Missing => ContentValue::Missing,
+            queries::ContentValue::Corrupt => ContentValue::Corrupt,
+            queries::ContentValue::Unresolvable => ContentValue::Unresolvable,
         },
     })
 }
@@ -180,7 +180,7 @@ fn search(
     })
 }
 
-fn evidence(queries: &ChainQueries, operation: OpId) -> io::Result<Evidence> {
+fn operation_details(queries: &ChainQueries, operation: OpId) -> io::Result<OperationDetails> {
     let records = queries
         .record_variants(operation)?
         .into_iter()
@@ -189,9 +189,9 @@ fn evidence(queries: &ChainQueries, operation: OpId) -> io::Result<Evidence> {
             bytes: record.encoded,
         })
         .collect();
-    let mut result = Evidence {
+    let mut result = OperationDetails {
         operation: operation.to_string(),
-        status: EvidenceStatus::Missing,
+        status: RecordLookupStatus::Missing,
         observation: None,
         records,
         fields: Vec::new(),
@@ -199,12 +199,12 @@ fn evidence(queries: &ChainQueries, operation: OpId) -> io::Result<Evidence> {
     };
     match queries.operation(operation)? {
         Lookup::Missing => {}
-        Lookup::Conflicted(_) => result.status = EvidenceStatus::Conflicted,
+        Lookup::Conflicted(_) => result.status = RecordLookupStatus::Conflicted,
         Lookup::Found(entry) => {
-            result.status = EvidenceStatus::Found;
+            result.status = RecordLookupStatus::Found;
             result.observation = Some(observation(&entry)?);
             let Lookup::Found(fields) = queries.contents(operation)? else {
-                return Err(io::Error::other("Evidence changed during lookup"));
+                return Err(io::Error::other("Operation changed during content lookup"));
             };
             result.fields = fields.into_iter().map(field).collect::<io::Result<_>>()?;
             if cache::kind(&entry.operation) == super::ActivityKind::File {

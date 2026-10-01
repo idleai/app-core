@@ -3,7 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    EvidenceState, Filter, Paging, QueryAction, RequestState, SearchView, Selected, cache::Cache,
+    Filter, OperationDetailsState, Paging, QueryAction, RequestState, SearchView, Selected,
+    cache::Cache,
 };
 
 /// Independent semantic history model owned by one Crux client.
@@ -17,8 +18,8 @@ pub struct Model {
     pub(super) paging: Paging,
     pub(super) item_pages: BTreeMap<String, Paging>,
     pub(super) search: SearchView,
-    pub(super) evidence: BTreeMap<String, EvidenceState>,
-    pub(super) evidence_order: Vec<String>,
+    pub(super) operation_details: BTreeMap<String, OperationDetailsState>,
+    pub(super) operation_details_order: Vec<String>,
     pub(super) open: RequestState,
     pub(super) cache: Cache,
     pub(super) next_request: u64,

@@ -11,9 +11,14 @@ import ai.idle.appcore.types.HostInfo
 import ai.idle.appcore.types.HostInfoResponse
 import ai.idle.appcore.types.HistoryEvent
 import ai.idle.appcore.types.HistoryPage
+import ai.idle.appcore.types.OperationDetails
+import ai.idle.appcore.types.OperationDetailsState
+import ai.idle.appcore.types.Query
+import ai.idle.appcore.types.QueryAction
 import ai.idle.appcore.types.QueryResponse
 import ai.idle.appcore.types.QueryResult
 import ai.idle.appcore.types.RequestState
+import ai.idle.appcore.types.RecordLookupStatus
 import ai.idle.appcore.types.LoadState
 import ai.idle.appcore.types.ViewModel
 import ai.idle.appcore.types.MemberInfo
@@ -102,6 +107,12 @@ private fun exercise(core: AppCore, other: AppCore) {
     check(view(core).history.paging.state == RequestState.Ready)
     check(view(core).history.paging.exhausted)
     check(view(other).history.chain == null)
+    val missingOperation = "a".repeat(64)
+    val detailId = send(core, Event.History(HistoryEvent.LoadOperationDetails(missingOperation, false)))
+        .request(EffectFfi.History(Query("chain", QueryAction.OperationDetails(missingOperation))))
+    val details = OperationDetails(missingOperation, RecordLookupStatus.MISSING, null, emptyList(), emptyList(), null)
+    respond(core, detailId, QueryResponse.Ok(QueryResult.OperationDetails(details)).bincodeSerialize())
+    check(view(core).history.operationDetails.single().state == OperationDetailsState.Ready(details))
 }
 
 private fun workspaceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
@@ -148,5 +159,6 @@ fun main() {
     workspaceSmoke(WorkspaceMode.STANDALONE)
     workspaceSmoke(WorkspaceMode.MANAGED)
     println("Kotlin/JVM + JNI + Facet: event -> effect -> result -> typed view PASS")
+    println("Kotlin/JVM operation records/content request -> result PASS")
     println("Kotlin/JVM workspace selection + members + presence in both modes PASS")
 }

@@ -1,4 +1,4 @@
-//! Portable query and evidence contracts for Rust and generated native shells.
+//! Queries, stored records and field content for Rust and generated native shells.
 
 use crux_core::capability::Operation;
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ pub enum ActivityKind {
     Original,
     /// Chain initialization, without an invented activity.
     Initialization,
-    /// Unsupported record retained as evidence.
+    /// Unsupported record whose original bytes remain available.
     Unknown,
 }
 
@@ -117,13 +117,13 @@ pub enum QueryAction {
         page: Page,
     },
     /// Fetch exact records and fields, including quarantined representations.
-    Evidence {
+    OperationDetails {
         /// Full observation identity.
         operation: String,
     },
     /// Ask the platform to open recorded content through its capabilities.
     Open {
-        /// Evidence identity, never a preview or row index.
+        /// Full operation ID and stored-record digest.
         record: RecordRef,
         /// Native action to perform.
         target: OpenTarget,
@@ -186,7 +186,7 @@ pub struct HistoryPage {
     pub scanned: u32,
 }
 
-/// One exact byte match, retaining evidence and field identity.
+/// One byte match with its source operation and field identity.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -224,7 +224,7 @@ pub struct SearchPage {
     /// Known matches only.
     pub matches: Vec<SearchMatch>,
     /// Fields for which search could not inspect complete content.
-    pub unavailable: Vec<FieldEvidence>,
+    pub unavailable: Vec<FieldContent>,
     /// Candidate count including nonmatches and gaps.
     pub scanned: u32,
     /// Continue even when there were zero matches.
@@ -234,7 +234,7 @@ pub struct SearchPage {
 /// Exact field availability; an empty byte vector is known empty content.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
-pub enum EvidenceValue {
+pub enum ContentValue {
     /// Exact verified bytes, including binary and empty content.
     Available(Vec<u8>),
     /// Field absent or inapplicable.
@@ -253,8 +253,8 @@ pub enum EvidenceValue {
     clippy::unsafe_derive_deserialize,
     reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
 )]
-pub struct FieldEvidence {
-    /// Exact supporting record.
+pub struct FieldContent {
+    /// Stored record containing this field.
     pub record: RecordRef,
     /// Engine `ContentField` JSON, also used by search matches.
     pub field: String,
@@ -263,7 +263,7 @@ pub struct FieldEvidence {
     /// Declared blob length, when recorded.
     pub declared_length: Option<u32>,
     /// Exact bytes or an explicit gap.
-    pub value: EvidenceValue,
+    pub value: ContentValue,
 }
 
 /// Exact archive bytes; conflicted variants are kept separately.
@@ -282,7 +282,7 @@ pub struct RawRecord {
 /// Lookup status independently of field-content availability.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
-pub enum EvidenceStatus {
+pub enum RecordLookupStatus {
     /// One accepted representation.
     Found,
     /// No accepted or retained representation is available.
@@ -312,23 +312,23 @@ pub enum Comparison {
     },
 }
 
-/// On-demand evidence shared by all client detail surfaces.
+/// An operation's stored records, field content and optional file comparison.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
     reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
 )]
-pub struct Evidence {
+pub struct OperationDetails {
     /// Requested full observation ID, including for missing records.
     pub operation: String,
     /// Missing and conflicted identities stay explicit.
-    pub status: EvidenceStatus,
+    pub status: RecordLookupStatus,
     /// Accepted observation only; never populated for a conflict.
     pub observation: Option<Observation>,
     /// All retained original encodings, including quarantined variants.
     pub records: Vec<RawRecord>,
     /// Exact content and explicit field gaps.
-    pub fields: Vec<FieldEvidence>,
+    pub fields: Vec<FieldContent>,
     /// Present for file revisions; absent snapshots remain unavailable.
     pub comparison: Option<Comparison>,
 }
@@ -341,8 +341,8 @@ pub enum QueryResult {
     History(HistoryPage),
     /// Search scan including gaps.
     Search(SearchPage),
-    /// Exact observation evidence.
-    Evidence(Evidence),
+    /// Stored records and resolved content for one operation.
+    OperationDetails(OperationDetails),
     /// Platform confirmed an open action.
     Opened,
 }
