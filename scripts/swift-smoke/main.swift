@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 4)
+check(core.protocolVersion() == 5)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -55,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 
@@ -140,3 +140,29 @@ func workspaceSmoke(_ mode: WorkspaceMode) throws {
 try workspaceSmoke(.standalone)
 try workspaceSmoke(.managed)
 print("Swift workspace selection + members + presence in both modes PASS")
+
+func subscriptionSmoke() throws {
+    let client = AppCore()
+    let context = Context(provider: "fixture", workspace: "workspace", contributor: "alice", chain: "chain")
+    let join = try request(send(client, .subscriptions(.connect(context))),
+                           .subscription(SubscriptionOperation(context: context, action: .join)))
+    let follow = try EffectBatch.bincodeDeserialize(input: Array(client.handleResponse(
+        id: join, response: Data(SubscriptionResponse.ok(.joined(connection: "connection")).bincodeSerialize())))).requests
+    check(try view(client).subscriptions.status == .reconciling)
+    guard let read = follow.first(where: {
+        if case .history = $0.effect { return true }; return false
+    }) else { throw SmokeError.missingEffect }
+    let watch = try request(follow, .subscription(SubscriptionOperation(context: context, action: .watch(connection: "connection"))))
+    let replacement = Reconciled(history: [HistoryPage(observations: [], nextAfter: nil, scanned: 0)], search: [], items: [], details: [])
+    _ = try client.handleResponse(id: read.id, response: Data(QueryResponse.ok(.reconciled(replacement)).bincodeSerialize()))
+    check(try view(client).subscriptions.status == .live)
+    check(try view(client).history.reconciliation == .ready)
+    _ = try send(client, .subscriptions(.reconnect))
+    let before = try view(client)
+    _ = try client.handleResponse(id: watch, response: Data(SubscriptionResponse.ok(.changed).bincodeSerialize()))
+    check(try view(client) == before)
+    check(before.subscriptions.status == .connecting)
+}
+
+try subscriptionSmoke()
+print("Swift subscription join + snapshot + stale watch PASS")

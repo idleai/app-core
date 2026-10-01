@@ -22,9 +22,9 @@ interface, binary shell protocol, and extension points. BoltFFI generates the
 native method bindings. Facet generates Swift and Kotlin payload types and bincode
 codecs. The shell exposes `process_event`,
 `handle_response`, `view`, and `protocol_version` (camelCase in generated hosts).
-Protocol **4** adds workspace navigation, membership and presence events, effects
-and views alongside semantic history. Hosts must regenerate their bindings and
-use the generated codecs.
+Protocol **5** adds shared subscription effects, reconnect status and atomic
+history reconciliation alongside workspace navigation and semantic history.
+Hosts must regenerate their bindings and use the generated codecs.
 
 The [history integration guide](docs/history.md) covers stable selection, literal
 search, filters, disclosure, paging, cached operation records and content replay.
@@ -40,6 +40,11 @@ members, expiring presence, navigation and loading/error states. Workspace
 selection passes only the logical chain reference to history. Hosts execute
 coordination reads through their configured adapters using the published
 `idle-protocol` snapshot projection.
+
+The [subscription integration guide](docs/subscriptions.md) describes correlated
+joins, buffered change watches, reconnects and replacement history reads. Replays
+preserve interaction identities while reconciling lower-ID records, conflicts and
+late content. Operation-ID page positions are never used to resume subscriptions.
 
 Rust 1.97.0 is selected by `rust-toolchain.toml`. Cargo installs the specified
 toolchain/targets on first use; lockfiles are tracked. Install the binding
@@ -105,7 +110,7 @@ The engine host adapter is native-only; WASM compiles the schema and pure reduce
 | `crates/app-core/src/projections.rs` | f25/projection-state |
 | `crates/app-core/src/resources.rs` | f26/resource-state |
 | `crates/app-core/src/configuration.rs` | f27/settings-rules-state |
-| `crates/app-core/src/subscriptions.rs` | f28/subscription-state |
+| `crates/app-core/src/subscriptions{.rs,/}`, history reconciliation and portable connection/request/revision state | f28/subscription-state |
 
 The [idle-protocol crate](crates/idle-protocol/README.md) publishes the
 `idle_protocol::v1` Rust API and a checked-in
@@ -126,8 +131,9 @@ History state adapts the selection, find, cache and disclosure behavior from
 EditChain's `editchain-history-renderer::app`. The old renderer delegates semantic
 selection to `idle-history`; node/protocol preview adapters also use that package.
 The old viewer's coordinate-based caches, disclosure and find adapters remain
-until the graph/detail consumers switch. Subscription/reconnect and extension
-sharing flows remain with their named feature owners.
+until the graph/detail consumers switch. Request correlation, revision checks and
+extension join/retry/status behavior delegate to app-core's portable modules.
+Credentials, peer approval and transport resources remain with their host owners.
 
 The dependency policy in `deny.toml` includes one explicit maintenance exception:
 [RUSTSEC-2025-0141](https://rustsec.org/advisories/RUSTSEC-2025-0141.html), for
@@ -136,9 +142,10 @@ serialization. Other advisories remain checked. Crux's optional macro feature
 is disabled, removing its unmaintained `proc-macro-error` dependency.
 
 Consumers handle `Effect::HostInfo`, boxed `Effect::History` and boxed
-`Effect::Workspace` requests, and include `bootstrap`, `history` and `workspace`
+`Effect::Workspace` and `Effect::Subscription` requests, and include `bootstrap`,
+`history`, `workspace` and `subscriptions`
 in `ViewModel` literals (or use `..Default::default()`).
 `initialized` still means the start event was processed; readiness is represented
 by `view.bootstrap`. Linkable native artifacts come from `app-core-bindings`,
 while `app-core` is the Rust library used by native and WASM clients. Domain modules
-reserved for f24–f28 remain with their feature owners.
+reserved for f24–f27 remain with their feature owners.

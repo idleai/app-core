@@ -7,6 +7,7 @@
 
 mod cache;
 mod model;
+mod reconciliation;
 mod reducer;
 mod types;
 mod views;
@@ -18,6 +19,7 @@ pub use idle_history::{
     ContentText, MAX_ROW_TEXT_BYTES, MAX_TOOL_LABEL_BYTES, RowContent, Selection,
 };
 pub use model::Model;
+pub use reconciliation::{ItemScan, ItemSnapshot, Reconcile, Reconciled};
 pub use reducer::{History, HistoryEvent as Event};
 pub use types::*;
 pub use views::*;

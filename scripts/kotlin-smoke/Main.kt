@@ -39,6 +39,14 @@ import ai.idle.appcore.types.WorkspaceRequestState
 import ai.idle.appcore.types.WorkspaceResponse
 import ai.idle.appcore.types.WorkspaceResult
 import ai.idle.appcore.types.WorkspaceSnapshot
+import ai.idle.appcore.types.ConnectionStatus
+import ai.idle.appcore.types.Context
+import ai.idle.appcore.types.Reconciled
+import ai.idle.appcore.types.SubscriptionAction
+import ai.idle.appcore.types.SubscriptionEvent
+import ai.idle.appcore.types.SubscriptionOperation
+import ai.idle.appcore.types.SubscriptionResponse
+import ai.idle.appcore.types.SubscriptionResult
 
 private fun view(core: AppCore): ViewModel = ViewModel.bincodeDeserialize(core.view())
 
@@ -63,7 +71,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 4u)
+    check(core.protocolVersion() == 5u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -74,7 +82,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     val effects = send(core, Event.Start)
     val id = effects.request(EffectFfi.HostInfo)
     val renderId = effects.first { it.effect == EffectFfi.Render }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -84,7 +92,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
     check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
@@ -151,6 +159,25 @@ private fun workspaceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
     check(view(client).history.chain == null)
 }
 
+private fun subscriptionSmoke() = AppCore().use { client ->
+    val context = Context("fixture", "workspace", "alice", "chain")
+    val join = send(client, Event.Subscriptions(SubscriptionEvent.Connect(context)))
+        .request(EffectFfi.Subscription(SubscriptionOperation(context, SubscriptionAction.Join)))
+    val follow = respond(client, join, SubscriptionResponse.Ok(SubscriptionResult.Joined("connection")).bincodeSerialize())
+    check(view(client).subscriptions.status == ConnectionStatus.RECONCILING)
+    val read = follow.single { it.effect is EffectFfi.History }
+    val watch = follow.request(EffectFfi.Subscription(SubscriptionOperation(context, SubscriptionAction.Watch("connection"))))
+    val replacement = Reconciled(listOf(HistoryPage(emptyList(), null, 0u)), emptyList(), emptyList(), emptyList())
+    respond(client, read.id, QueryResponse.Ok(QueryResult.Reconciled(replacement)).bincodeSerialize())
+    check(view(client).subscriptions.status == ConnectionStatus.LIVE)
+    check(view(client).history.reconciliation == RequestState.Ready)
+    send(client, Event.Subscriptions(SubscriptionEvent.Reconnect))
+    val before = view(client)
+    respond(client, watch, SubscriptionResponse.Ok(SubscriptionResult.Changed).bincodeSerialize())
+    check(view(client) == before)
+    check(before.subscriptions.status == ConnectionStatus.CONNECTING)
+}
+
 fun main() {
     val core = AppCore()
     core.use { AppCore().use { other -> exercise(core, other) } }
@@ -158,7 +185,9 @@ fun main() {
     check(runCatching { core.view() }.exceptionOrNull() is IllegalStateException)
     workspaceSmoke(WorkspaceMode.STANDALONE)
     workspaceSmoke(WorkspaceMode.MANAGED)
+    subscriptionSmoke()
     println("Kotlin/JVM + JNI + Facet: event -> effect -> result -> typed view PASS")
     println("Kotlin/JVM operation records/content request -> result PASS")
     println("Kotlin/JVM workspace selection + members + presence in both modes PASS")
+    println("Kotlin/JVM subscription join + snapshot + stale watch PASS")
 }

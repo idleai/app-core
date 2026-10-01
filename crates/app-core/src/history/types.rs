@@ -128,6 +128,8 @@ pub enum QueryAction {
         /// Native action to perform.
         target: OpenTarget,
     },
+    /// Atomically replace loaded windows after reconnect or a source change.
+    Reconcile(Box<super::Reconcile>),
 }
 
 /// Native content action. Hosts report unavailable capabilities as errors.
@@ -345,6 +347,8 @@ pub enum QueryResult {
     OperationDetails(OperationDetails),
     /// Platform confirmed an open action.
     Opened,
+    /// Replacement loaded windows from one refreshed engine index.
+    Reconciled(Box<super::Reconciled>),
 }
 
 /// Result returned by typed Rust hosts.

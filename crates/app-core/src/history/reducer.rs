@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use super::{
     Filter, HistoryPage, MatchView, Model, OpenTarget, OperationDetailsState, OperationDetailsView,
     Page, Paging, Query, QueryAction, QueryOutput, QueryResult, RecordLookupStatus, RecordRef,
-    RequestState, SearchView, Selected, ViewModel, cache,
+    RequestState, SearchView, Selected, ViewModel, cache, reconciliation,
 };
 use crate::{effects::Effect, module::EffectError};
 
@@ -57,6 +57,10 @@ pub enum HistoryEvent {
         /// Platform action.
         target: OpenTarget,
     },
+    /// Retire in-flight reads when a transport closes, preserving visible state.
+    Suspend,
+    /// Read a fresh snapshot on a new connection, preserving interaction state.
+    Reconnect,
     /// Internal continuation. Serialized client events cannot forge results.
     #[serde(skip)]
     #[facet(skip)]
@@ -79,79 +83,24 @@ impl App for History {
     type Effect = Effect;
 
     fn update(&self, event: Event, model: &mut Model) -> HistoryCommand {
-        match event {
-            Event::Connect(chain) => {
-                if model.chain.as_ref() == Some(&chain) {
-                    return Command::done();
-                }
-                reset(model);
-                model.chain = Some(chain);
-                load_history(model)
-            }
-            Event::Disconnect => {
-                reset(model);
-                render::render()
-            }
-            Event::SetFilter(filter) => {
-                if model.filter == filter {
-                    return Command::done();
-                }
-                model.filter = filter;
-                restart_scans(model)
-            }
-            Event::LoadMore => load_history(model),
-            Event::Search(text) => {
-                model
-                    .pending
-                    .retain(|_, action| !matches!(action, QueryAction::Search { .. }));
-                model.search = SearchView {
-                    text,
-                    ..SearchView::default()
-                };
-                load_search(model).and(render::render())
-            }
-            Event::SearchMore => load_search(model),
-            Event::NavigateMatch(delta) => navigate(model, delta),
-            Event::Select(selected) => select(model, selected),
-            Event::ClearSelection => {
-                model.selected = Selected::default();
-                render::render()
-            }
-            Event::ToggleDisclosure(item) => {
-                if cache::full_id(&item).is_err() {
-                    return Command::done();
-                }
-                if model.expanded.remove(&item) {
-                    return render::render();
-                }
-                let _inserted = model.expanded.insert(item.clone());
-                load_item(model, item).and(render::render())
-            }
-            Event::LoadItem(item) => load_item(model, item),
-            Event::LoadOperationDetails { operation, refresh } => {
-                load_operation_details(model, operation, refresh)
-            }
-            Event::Refresh => refresh(model),
-            Event::Open { record, target } => {
-                if model.chain.is_none() {
-                    model.open = RequestState::Failed(cache::error("No history chain is selected"));
-                    return render::render();
-                }
-                if cache::full_id(&record.operation).is_err()
-                    || cache::full_id(&record.hash).is_err()
-                {
-                    model.open = RequestState::Failed(cache::error(
-                        "Native action requires a full operation ID and record digest",
-                    ));
-                    return render::render();
-                }
-                model
-                    .pending
-                    .retain(|_, action| !matches!(action, QueryAction::Open { .. }));
-                model.open = RequestState::Loading;
-                request(model, QueryAction::Open { record, target })
-            }
-            Event::Completed { request, result } => complete(model, request, result),
+        let restart = model.reconciliation == RequestState::Loading
+            && matches!(
+                &event,
+                Event::SetFilter(_)
+                    | Event::Search(_)
+                    | Event::NavigateMatch(_)
+                    | Event::Select(_)
+                    | Event::ClearSelection
+                    | Event::ToggleDisclosure(_)
+                    | Event::LoadItem(_)
+                    | Event::LoadOperationDetails { .. }
+            );
+        let command = transition(event, model);
+        if restart {
+            suspend(model);
+            command.and(refresh(model))
+        } else {
+            command
         }
     }
 
@@ -183,26 +132,118 @@ impl App for History {
                 .collect(),
             open: model.open.clone(),
             cache: model.cache.status(),
+            reconciliation: model.reconciliation.clone(),
         }
+    }
+}
+
+fn transition(event: Event, model: &mut Model) -> HistoryCommand {
+    match event {
+        Event::Connect(chain) => {
+            if model.chain.as_ref() == Some(&chain) {
+                return Command::done();
+            }
+            reset(model);
+            model.chain = Some(chain);
+            load_history(model)
+        }
+        Event::Disconnect => {
+            reset(model);
+            render::render()
+        }
+        Event::SetFilter(filter) => {
+            if model.filter == filter {
+                return Command::done();
+            }
+            model.filter = filter;
+            restart_scans(model)
+        }
+        Event::LoadMore => load_history(model),
+        Event::Search(text) => {
+            model
+                .pending
+                .retain(|action| !matches!(action, QueryAction::Search { .. }));
+            model.search = SearchView {
+                text,
+                ..SearchView::default()
+            };
+            load_search(model).and(render::render())
+        }
+        Event::SearchMore => load_search(model),
+        Event::NavigateMatch(delta) => navigate(model, delta),
+        Event::Select(selected) => select(model, selected),
+        Event::ClearSelection => {
+            model.selected = Selected::default();
+            render::render()
+        }
+        Event::ToggleDisclosure(item) => {
+            if cache::full_id(&item).is_err() {
+                return Command::done();
+            }
+            if model.expanded.remove(&item) {
+                return render::render();
+            }
+            let _inserted = model.expanded.insert(item.clone());
+            load_item(model, item).and(render::render())
+        }
+        Event::LoadItem(item) => load_item(model, item),
+        Event::LoadOperationDetails { operation, refresh } => {
+            load_operation_details(model, operation, refresh)
+        }
+        Event::Refresh => refresh(model),
+        Event::Suspend => {
+            suspend(model);
+            render::render()
+        }
+        Event::Reconnect => {
+            suspend(model);
+            refresh(model)
+        }
+        Event::Open { record, target } => {
+            if model.chain.is_none() {
+                model.open = RequestState::Failed(cache::error("No history chain is selected"));
+                return render::render();
+            }
+            if cache::full_id(&record.operation).is_err() || cache::full_id(&record.hash).is_err() {
+                model.open = RequestState::Failed(cache::error(
+                    "Native action requires a full operation ID and record digest",
+                ));
+                return render::render();
+            }
+            model
+                .pending
+                .retain(|action| !matches!(action, QueryAction::Open { .. }));
+            model.open = RequestState::Loading;
+            request(model, QueryAction::Open { record, target })
+        }
+        Event::Completed { request, result } => complete(model, request, result),
     }
 }
 
 fn reset(model: &mut Model) {
     // Never reuse a token from a detached context, even when switching A -> B -> A.
     *model = Model {
-        next_request: model.next_request,
+        pending: {
+            model.pending.clear();
+            std::mem::take(&mut model.pending)
+        },
         ..Model::default()
     };
 }
 
 fn request(model: &mut Model, action: QueryAction) -> HistoryCommand {
+    if model.reconciliation == RequestState::Loading
+        && !matches!(action, QueryAction::Reconcile(_) | QueryAction::Open { .. })
+    {
+        return Command::done();
+    }
     let Some(chain) = model.chain.clone() else {
         return Command::done();
     };
     if model.pending.values().any(|pending| *pending == action) {
         return Command::done();
     }
-    let Some(id) = model.next_request.checked_add(1) else {
+    let Ok(id) = model.pending.register(action.clone(), false) else {
         fail(
             model,
             &action,
@@ -210,8 +251,6 @@ fn request(model: &mut Model, action: QueryAction) -> HistoryCommand {
         );
         return render::render();
     };
-    model.next_request = id;
-    let _previous = model.pending.insert(id, action.clone());
     Command::request_from_shell(Query { chain, action })
         .then_send(move |result| Event::Completed {
             request: id,
@@ -231,6 +270,9 @@ fn next_page(paging: &Paging) -> Option<Page> {
 }
 
 fn load_history(model: &mut Model) -> HistoryCommand {
+    if model.reconciliation == RequestState::Loading {
+        return Command::done();
+    }
     if model.chain.is_none() {
         return Command::done();
     }
@@ -248,6 +290,9 @@ fn load_history(model: &mut Model) -> HistoryCommand {
 }
 
 fn load_search(model: &mut Model) -> HistoryCommand {
+    if model.reconciliation == RequestState::Loading {
+        return Command::done();
+    }
     if model.chain.is_none() || model.search.text.is_empty() {
         return Command::done();
     }
@@ -294,7 +339,7 @@ fn load_operation_details(model: &mut Model, operation: String, refresh: bool) -
     {
         return Command::done();
     }
-    model.pending.retain(|_, action| !matches!(action, QueryAction::OperationDetails { operation: pending } if *pending == operation));
+    model.pending.retain(|action| !matches!(action, QueryAction::OperationDetails { operation: pending } if *pending == operation));
     if let Err(error) = cache::full_id(&operation) {
         let _previous = model
             .operation_details
@@ -310,7 +355,7 @@ fn load_operation_details(model: &mut Model, operation: String, refresh: bool) -
 }
 
 fn restart_scans(model: &mut Model) -> HistoryCommand {
-    model.pending.retain(|_, action| {
+    model.pending.retain(|action| {
         !matches!(
             action,
             QueryAction::History { .. } | QueryAction::Search { .. }
@@ -327,23 +372,41 @@ fn restart_scans(model: &mut Model) -> HistoryCommand {
         .and(render::render())
 }
 
-fn refresh(model: &mut Model) -> HistoryCommand {
-    // A fresh bounded snapshot scan admits late lower-ID records. Durable change
-    // cursors and multi-page snapshot consistency are the subscription owner's job.
+fn suspend(model: &mut Model) {
     model.pending.clear();
-    model.cache = cache::Cache::default();
-    model.operation_details.clear();
-    model.operation_details_order.clear();
-    model.item_pages.clear();
-    model.open = RequestState::Idle;
-    let mut command = restart_scans(model);
-    if let Some(item) = model.selected.item.clone() {
-        command = command.and(load_item(model, item));
+    model.reconcile_again = false;
+    model.reconciliation = RequestState::Idle;
+    if model.paging.state == RequestState::Loading {
+        model.paging.state = RequestState::Idle;
     }
-    if let Some(operation) = model.selected.observation.clone() {
-        command = command.and(load_operation_details(model, operation, false));
+    if model.search.paging.state == RequestState::Loading {
+        model.search.paging.state = RequestState::Idle;
     }
-    command
+    for page in model.item_pages.values_mut() {
+        if page.state == RequestState::Loading {
+            page.state = RequestState::Idle;
+        }
+    }
+    model
+        .operation_details
+        .retain(|_, value| !matches!(value, OperationDetailsState::Loading));
+    if model.open == RequestState::Loading {
+        model.open = RequestState::Idle;
+    }
+}
+
+fn refresh(model: &mut Model) -> HistoryCommand {
+    if model.chain.is_none() {
+        return Command::done();
+    }
+    if model.reconciliation == RequestState::Loading {
+        model.reconcile_again = true;
+        return Command::done();
+    }
+    let snapshot = reconciliation::request(model);
+    suspend(model);
+    model.reconciliation = RequestState::Loading;
+    request(model, QueryAction::Reconcile(Box::new(snapshot)))
 }
 
 fn select(model: &mut Model, selected: Selected) -> HistoryCommand {
@@ -415,7 +478,7 @@ fn navigate(model: &mut Model, delta: i32) -> HistoryCommand {
 }
 
 fn complete(model: &mut Model, id: u64, result: QueryOutput) -> HistoryCommand {
-    let Some(action) = model.pending.remove(&id) else {
+    let Some((action, _window)) = model.pending.take(id) else {
         return Command::done();
     };
     if let Err(error) = result.and_then(|result| apply(model, &action, result)) {
@@ -428,6 +491,10 @@ fn complete(model: &mut Model, id: u64, result: QueryOutput) -> HistoryCommand {
         let _old = model.item_pages.remove(&item);
     }
     prune_operation_details(model);
+    if matches!(action, QueryAction::Reconcile(_)) && model.reconcile_again {
+        model.reconcile_again = false;
+        return refresh(model);
+    }
     render::render()
 }
 
@@ -463,7 +530,8 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
         QueryAction::History { page, .. } | QueryAction::Item { page, .. } => page,
         QueryAction::Search { .. }
         | QueryAction::OperationDetails { .. }
-        | QueryAction::Open { .. } => {
+        | QueryAction::Open { .. }
+        | QueryAction::Reconcile(_) => {
             return Err(cache::error("Wrong history response type"));
         }
     };
@@ -492,7 +560,8 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
             QueryAction::Item { item, .. } => value.item_key()? == *item,
             QueryAction::Search { .. }
             | QueryAction::OperationDetails { .. }
-            | QueryAction::Open { .. } => false,
+            | QueryAction::Open { .. }
+            | QueryAction::Reconcile(_) => false,
         };
         if !matches {
             return Err(cache::error("History response does not match its query"));
@@ -501,7 +570,11 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
     Ok(())
 }
 
-fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result<(), EffectError> {
+pub(super) fn apply(
+    model: &mut Model,
+    action: &QueryAction,
+    result: QueryResult,
+) -> Result<(), EffectError> {
     match (action, result) {
         (QueryAction::History { .. } | QueryAction::Item { .. }, QueryResult::History(result)) => {
             validate_history(action, &result)?;
@@ -516,7 +589,8 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
                 QueryAction::History { .. } => &mut model.paging,
                 QueryAction::Search { .. }
                 | QueryAction::OperationDetails { .. }
-                | QueryAction::Open { .. } => return Err(cache::error("Wrong history request")),
+                | QueryAction::Open { .. }
+                | QueryAction::Reconcile(_) => return Err(cache::error("Wrong history request")),
             };
             settle(paging, result.scanned, result.next_after);
         }
@@ -636,6 +710,9 @@ fn apply(model: &mut Model, action: &QueryAction, result: QueryResult) -> Result
                 .insert(operation.clone(), OperationDetailsState::Ready(result));
         }
         (QueryAction::Open { .. }, QueryResult::Opened) => model.open = RequestState::Ready,
+        (QueryAction::Reconcile(request), QueryResult::Reconciled(result)) => {
+            reconciliation::apply(model, request, *result)?;
+        }
         _ => {
             return Err(cache::error(
                 "Host returned a result for a different history operation",
@@ -658,6 +735,7 @@ fn fail(model: &mut Model, action: &QueryAction, error: EffectError) {
                 .insert(operation.clone(), OperationDetailsState::Failed(error));
         }
         QueryAction::Open { .. } => model.open = RequestState::Failed(error),
+        QueryAction::Reconcile(_) => model.reconciliation = RequestState::Failed(error),
     }
 }
 

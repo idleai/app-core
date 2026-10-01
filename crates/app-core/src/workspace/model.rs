@@ -31,6 +31,10 @@ impl Model {
         self.connected
     }
 
+    pub(crate) fn workspace_id(&self) -> Option<&str> {
+        self.view.selected_workspace.as_deref()
+    }
+
     pub(super) fn selected(&self) -> Option<&WorkspaceInfo> {
         self.view
             .workspaces

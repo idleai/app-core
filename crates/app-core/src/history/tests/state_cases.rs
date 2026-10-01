@@ -73,7 +73,11 @@ fn logical_identity_disclosure_and_replay_survive_pages_and_refresh() {
         "cached item does not reload"
     );
     let refresh = send(&core, Event::Refresh);
-    assert_eq!(refresh.len(), 2, "fresh history and selected item scans");
+    assert_eq!(
+        refresh.len(),
+        1,
+        "one atomic history and selected item read"
+    );
     assert_eq!(
         core.view().history.selected.item,
         Some(id(200).to_string()),

@@ -3,7 +3,10 @@
 //! Hosts resolve a chain binding to their own `ChainQueries` instance, then call
 //! [`execute`]. WASM hosts execute the same portable requests remotely. Filesystem
 //! I/O stays outside the reducer. Refreshing before a read is not a subscription
-//! checkpoint; f28 owns reconnect and durable reconciliation.
+//! checkpoint. Reconciliation reads refresh once and materialize all loaded windows
+//! against that index before returning a replacement to the reducer.
+
+mod reconciliation;
 
 use std::io;
 
@@ -79,6 +82,8 @@ fn execute_read(queries: &ChainQueries, action: &QueryAction) -> io::Result<Quer
             io::ErrorKind::Unsupported,
             "Native action requires a platform adapter",
         )),
+        QueryAction::Reconcile(request) => reconciliation::capture(queries, request)
+            .map(|snapshot| QueryResult::Reconciled(Box::new(snapshot))),
     }
 }
 

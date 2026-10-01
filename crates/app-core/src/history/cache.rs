@@ -156,6 +156,15 @@ impl Filter {
 }
 
 impl Cache {
+    pub(super) fn identities(&self) -> Vec<String> {
+        self.records.keys().cloned().collect()
+    }
+
+    pub(super) fn observation(&self, operation: &str) -> Option<Observation> {
+        self.records
+            .get(operation)
+            .map(|record| record.wire.clone())
+    }
     pub(super) fn insert(&mut self, wire: Observation) -> Result<String, EffectError> {
         let op = wire.operation()?;
         let key = item_key(&op);

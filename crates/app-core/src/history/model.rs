@@ -22,6 +22,22 @@ pub struct Model {
     pub(super) operation_details_order: Vec<String>,
     pub(super) open: RequestState,
     pub(super) cache: Cache,
-    pub(super) next_request: u64,
-    pub(super) pending: BTreeMap<u64, QueryAction>,
+    pub(super) pending: idle_history::requests::RequestTracker<QueryAction>,
+    pub(super) reconciliation: RequestState,
+    pub(super) reconcile_again: bool,
+}
+
+impl Model {
+    pub(crate) fn bind(&mut self, chain: Option<String>) {
+        self.pending.clear();
+        *self = Self {
+            chain,
+            pending: std::mem::take(&mut self.pending),
+            ..Self::default()
+        };
+    }
+
+    pub(crate) const fn reconciliation(&self) -> &RequestState {
+        &self.reconciliation
+    }
 }

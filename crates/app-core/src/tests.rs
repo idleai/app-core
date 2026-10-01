@@ -22,7 +22,9 @@ fn host_info() -> HostInfo {
 fn host_request(effects: Vec<Effect>) -> crux_core::Request<HostInfoOperation> {
     let mut requests = effects.into_iter().filter_map(|effect| match effect {
         Effect::HostInfo(request) => Some(request),
-        Effect::Render(_) | Effect::History(_) | Effect::Workspace(_) => None,
+        Effect::Render(_) | Effect::History(_) | Effect::Workspace(_) | Effect::Subscription(_) => {
+            None
+        }
     });
     let request = requests.next().expect("one host request");
     assert!(
@@ -377,7 +379,7 @@ fn protocol_v4_binary_layout_matches_the_public_types() {
     }
 
     assert_eq!(
-        PROTOCOL_VERSION, 4,
+        PROTOCOL_VERSION, 5,
         "workspace navigation extends the binary shell protocol"
     );
     assert_eq!(encode(&Event::Start), START, "stable Start discriminant");

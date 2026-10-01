@@ -41,7 +41,8 @@ their real connection is supplied.
 | `Select` | Select a logical item and optionally one of its recorded operations. Load item context, stored records and field content. |
 | `ToggleDisclosure` / `LoadItem` | Expand by logical identity and load further observations for that item. |
 | `LoadOperationDetails` | Cache an operation's stored records and field content; `refresh: true` rechecks late or changed availability. |
-| `Refresh` | Discard query caches, restart from the beginning and retain selection/disclosure identities. |
+| `Refresh` | Atomically reconcile loaded windows from the beginning, retaining visible data, selection and disclosure while the read runs. |
+| `Suspend` / `Reconnect` | Retire old connection reads; on reconnect, request a replacement snapshot without reusing operation-ID page positions. |
 | `Open` | Emit a record/Original/file/diff request with the full operation ID and stored-record digest for the host. |
 
 Pages inspect at most 100 candidates by default. A filtered or search page can be
@@ -88,19 +89,20 @@ pinned. The record/content cache has a soft limit of 64 operation lookups, with 
 and selected lookups pinned.
 `view.cache` reports eviction; evicted item scans become reloadable. Old-context,
 superseded-search and invalid response variants cannot overwrite current state.
-Query continuation IDs are local to the current core. Shell protocol 4 carries
+Query continuation IDs are local to the current core. Shell protocol 5 carries
 these types through generated Swift/Kotlin codecs and excludes internal completion
 events from serialized client actions.
 
-This module provides one-shot query correlation and explicit snapshot refresh.
-Durable subscriptions, multi-page snapshot consistency, reconnect reconciliation,
-automatic lower-ID insert/conflict notifications and live presence delivery belong
-to f28.
+The [subscription reducer](subscriptions.md) coordinates joins, change watches and
+reconnect recovery. `Reconcile` reads materialize all loaded windows against one
+refreshed index, validate the whole response, then replace cached state. Lower-ID
+inserts, conflict retractions and late blobs are reconciled without appending
+duplicate state. The host must buffer invalidations throughout the read.
 Operation-ID cursors and `refresh()` results are not durable subscription cursors.
 
 The legacy viewer keeps coordinate/viewport adapters until f30/f31 migrate its
 graph/details consumers. Its semantic selection and preview contracts already
-delegate to `idle-history`; its revisioned request/reconnect adapters remain for
-f28. Native document-opening adapters move with f40. The compatibility `legacy`
+delegate to `idle-history`, as do its request tracker and revision checks.
+Native document-opening adapters move with f40. The compatibility `legacy`
 preview functions are deliberately lossy and are never used by the new reducer's
 record/content lookup path.

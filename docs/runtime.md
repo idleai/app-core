@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `4`; includes semantic history and workspace payloads. |
+| `protocol_version()` | Returns `5`; includes history, workspace and subscription payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse` or `WorkspaceResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse` or `SubscriptionResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
