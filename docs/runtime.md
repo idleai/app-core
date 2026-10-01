@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `3`; includes semantic history payloads. |
+| `protocol_version()` | Returns `4`; includes semantic history and workspace payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse` or `QueryResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse` or `WorkspaceResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -60,11 +60,17 @@ effects, view model, `update` and `view`.
 
 Use distinct Rust names for reflected domain event enums, then re-export them as
 `Event` if desired. Facet 0.19's registry can conflate multiple nested enums named
-`Event` despite rename attributes. The history module uses `HistoryEvent` and
-verifies the generated event/result codecs in both native smoke tests.
+`Event` despite rename attributes. The history and workspace modules use
+`HistoryEvent` and `WorkspaceEvent` and verify their generated event/result
+codecs in both native smoke tests.
 
 See [history integration](history.md) for engine query execution and evidence
 models. Rust hosts resolve boxed history requests with `request.as_mut()`.
+
+See [workspace integration](workspace.md) for both coordination modes,
+repository-to-chain bindings, member/presence views and navigation. Hosts resolve
+boxed workspace requests with `request.as_mut()`. Workspace selection wires the
+logical chain into history; repository changes within a workspace retain it.
 
 This foundation handles one-shot effects and render notifications. Subscription
 and reconnect behavior belong to later domain work.

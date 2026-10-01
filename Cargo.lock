@@ -34,6 +34,7 @@ dependencies = [
  "facet",
  "facet_generate",
  "idle-history",
+ "idle-protocol",
  "serde",
  "serde_json",
  "tempfile",

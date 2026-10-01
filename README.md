@@ -22,8 +22,9 @@ interface, binary shell protocol, and extension points. BoltFFI generates the
 native method bindings. Facet generates Swift and Kotlin payload types and bincode
 codecs. The shell exposes `process_event`,
 `handle_response`, `view`, and `protocol_version` (camelCase in generated hosts).
-Protocol **3** adds semantic history events, query effects and view models. Hosts
-must regenerate their bindings and use the generated codecs.
+Protocol **4** adds workspace navigation, membership and presence events, effects
+and views alongside semantic history. Hosts must regenerate their bindings and
+use the generated codecs.
 
 The [history integration guide](docs/history.md) covers stable selection, literal
 search, filters, disclosure, paging, cached evidence and immutable content replay.
@@ -32,6 +33,13 @@ WASM hosts use the same portable requests through their own engine connection.
 `idle-history` holds the small portable contracts still consumed by the legacy
 EditChain viewer during its migration. Graph geometry, scrolling and rendering
 remain client responsibilities.
+
+The [workspace integration guide](docs/workspace.md) covers standalone/managed
+selection, explicit repository-to-chain bindings, reusable resource attachments,
+members, expiring presence, navigation and loading/error states. Workspace
+selection passes only the logical chain reference to history. Hosts execute
+coordination reads through their configured adapters using the published
+`idle-protocol` snapshot projection.
 
 Rust 1.97.0 is selected by `rust-toolchain.toml`. Cargo installs the specified
 toolchain/targets on first use; lockfiles are tracked. Install the binding
@@ -89,9 +97,9 @@ The engine host adapter is native-only; WASM compiles the schema and pure reduce
 
 | Boundary | Owner after f1 |
 | --- | --- |
-| Root manifest, exports, bootstrap/runtime, `app-core-bindings` and shell payload types | f21/crux-runtime |
+| Root manifest, exports, bootstrap/runtime, `app-core-bindings` and shell payload types | f21/crux-runtime; f22 owns workspace composition and shell-v4 additions |
 | `crates/idle-protocol`, its manifest, exports and schemas | f20/coordination-contracts |
-| `crates/app-core/src/workspace.rs` | f22/workspace-state |
+| `crates/app-core/src/workspace{.rs,/}`, its app-core manifest dependency and host wiring | f22/workspace-state |
 | `crates/app-core/src/history{.rs,/}`, `crates/idle-history` | f23/history-state |
 | `crates/app-core/src/sessions.rs` | f24/session-state |
 | `crates/app-core/src/projections.rs` | f25/projection-state |
@@ -127,9 +135,10 @@ Crux 0.20's mandatory `bincode` 1.3.3 dependency. Remove it when Crux migrates
 serialization. Other advisories remain checked. Crux's optional macro feature
 is disabled, removing its unmaintained `proc-macro-error` dependency.
 
-Consumers handle `Effect::HostInfo` and boxed `Effect::History` requests, and include
-`bootstrap` and `history` in `ViewModel` literals (or use `..Default::default()`).
+Consumers handle `Effect::HostInfo`, boxed `Effect::History` and boxed
+`Effect::Workspace` requests, and include `bootstrap`, `history` and `workspace`
+in `ViewModel` literals (or use `..Default::default()`).
 `initialized` still means the start event was processed; readiness is represented
 by `view.bootstrap`. Linkable native artifacts come from `app-core-bindings`,
 while `app-core` is the Rust library used by native and WASM clients. Domain modules
-reserved for f22 and f24–f28 remain with their feature owners.
+reserved for f24–f28 remain with their feature owners.

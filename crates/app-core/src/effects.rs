@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
+use crate::workspace::{WorkspaceOperation, WorkspaceOutput};
 
 /// Information supplied by the embedding client, not inferred by the core.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
@@ -65,6 +66,8 @@ pub enum Effect {
     HostInfo(Request<HostInfoOperation>),
     /// Execute a chain-scoped history query or platform history action.
     History(Box<Request<Query>>),
+    /// Execute authorized workspace discovery, membership or presence reads.
+    Workspace(Box<Request<WorkspaceOperation>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -87,6 +90,12 @@ impl From<Request<Query>> for Effect {
     }
 }
 
+impl From<Request<WorkspaceOperation>> for Effect {
+    fn from(request: Request<WorkspaceOperation>) -> Self {
+        Self::Workspace(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -97,13 +106,15 @@ pub enum EffectFfi {
     HostInfo,
     /// Return a history query result for this request ID.
     History(Box<Query>),
+    /// Return a workspace result for this request ID.
+    Workspace(Box<WorkspaceOperation>),
 }
 
 impl EffectFfi {
     pub(crate) const fn expects_response(&self) -> bool {
         match self {
             Self::Render => false,
-            Self::HostInfo | Self::History(_) => true,
+            Self::HostInfo | Self::History(_) | Self::Workspace(_) => true,
         }
     }
 
@@ -116,6 +127,10 @@ impl EffectFfi {
             }
             Self::History(_) => {
                 let _result: QueryOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
+            Self::Workspace(_) => {
+                let _result: WorkspaceOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
         }
@@ -131,6 +146,9 @@ impl EffectFFI for Effect {
             Self::HostInfo(request) => request.serialize(|_| EffectFfi::HostInfo),
             Self::History(request) => {
                 request.serialize(|query| EffectFfi::History(Box::new(query)))
+            }
+            Self::Workspace(request) => {
+                request.serialize(|operation| EffectFfi::Workspace(Box::new(operation)))
             }
         }
     }

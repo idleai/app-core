@@ -22,7 +22,7 @@ fn host_info() -> HostInfo {
 fn host_request(effects: Vec<Effect>) -> crux_core::Request<HostInfoOperation> {
     let mut requests = effects.into_iter().filter_map(|effect| match effect {
         Effect::HostInfo(request) => Some(request),
-        Effect::Render(_) | Effect::History(_) => None,
+        Effect::Render(_) | Effect::History(_) | Effect::Workspace(_) => None,
     });
     let request = requests.next().expect("one host request");
     assert!(
@@ -366,7 +366,7 @@ fn concurrent_native_calls_issue_one_bootstrap_operation() {
 }
 
 #[test]
-fn protocol_v3_binary_layout_matches_the_public_types() {
+fn protocol_v4_binary_layout_matches_the_public_types() {
     use crate::effects::{HostInfoResponse, HostInfoResult};
     use crate::shell::{EffectBatch, PROTOCOL_VERSION};
 
@@ -377,8 +377,8 @@ fn protocol_v3_binary_layout_matches_the_public_types() {
     }
 
     assert_eq!(
-        PROTOCOL_VERSION, 3,
-        "history extends the binary shell protocol"
+        PROTOCOL_VERSION, 4,
+        "workspace navigation extends the binary shell protocol"
     );
     assert_eq!(encode(&Event::Start), START, "stable Start discriminant");
     assert_eq!(

@@ -63,7 +63,7 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<Query>> {
         .into_iter()
         .filter_map(|effect| match effect {
             Effect::History(request) => Some(*request),
-            Effect::Render(_) | Effect::HostInfo(_) => None,
+            Effect::Render(_) | Effect::HostInfo(_) | Effect::Workspace(_) => None,
         })
         .collect()
 }

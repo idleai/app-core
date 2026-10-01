@@ -54,7 +54,7 @@ fn history_round_trips_through_shell_and_generated_response_contract() {
         "foreign host updates shared history state"
     );
     assert_eq!(
-        PROTOCOL_VERSION, 3,
+        PROTOCOL_VERSION, 4,
         "clients regenerate their payload bindings"
     );
     assert!(

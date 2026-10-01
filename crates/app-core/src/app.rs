@@ -3,7 +3,7 @@
 use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
-use crate::{bootstrap, effects::Effect, history};
+use crate::{bootstrap, effects::Effect, history, workspace};
 
 /// State owned by one client, partitioned by domain reducer.
 #[derive(Debug, Default)]
@@ -11,6 +11,7 @@ pub struct Model {
     initialized: bool,
     bootstrap: bootstrap::Model,
     history: history::Model,
+    workspace: workspace::Model,
 }
 
 /// Client actions and domain events accepted by the application.
@@ -23,6 +24,8 @@ pub enum Event {
     Bootstrap(bootstrap::Event),
     /// Route a semantic history action.
     History(history::Event),
+    /// Route workspace selection, membership and presence actions.
+    Workspace(workspace::Event),
 }
 
 /// The typed presentation state shared by all client surfaces.
@@ -38,6 +41,8 @@ pub struct ViewModel {
     pub bootstrap: bootstrap::ViewModel,
     /// Shared history interaction and exact evidence state.
     pub history: history::ViewModel,
+    /// Shared workspace/repository navigation, members and presence.
+    pub workspace: workspace::ViewModel,
 }
 
 /// Root reducer composing the shared application's domain modules.
@@ -65,9 +70,41 @@ impl App for IdleApp {
             }
             Event::Bootstrap(event) => event,
             Event::History(event) => {
+                // Workspace navigation owns the binding while connected. Direct
+                // chain selection remains available to independent history clients.
+                if model.workspace.owns_history()
+                    && (matches!(&event, history::Event::Connect(chain) if model.workspace.chain() != Some(chain.as_str()))
+                        || matches!(event, history::Event::Disconnect))
+                {
+                    return Command::done();
+                }
                 return history::History
                     .update(event, &mut model.history)
                     .map_event(Event::History);
+            }
+            Event::Workspace(event) => {
+                let before = (
+                    model.workspace.chain().map(str::to_owned),
+                    model.workspace.owns_history(),
+                );
+                let command = workspace::Workspace
+                    .update(event, &mut model.workspace)
+                    .map_event(Event::Workspace);
+                let after = (
+                    model.workspace.chain().map(str::to_owned),
+                    model.workspace.owns_history(),
+                );
+                if before == after {
+                    return command;
+                }
+                let event = after
+                    .0
+                    .map_or(history::Event::Disconnect, history::Event::Connect);
+                return command.and(
+                    history::History
+                        .update(event, &mut model.history)
+                        .map_event(Event::History),
+                );
             }
         };
         bootstrap::Bootstrap
@@ -80,6 +117,7 @@ impl App for IdleApp {
             initialized: model.initialized,
             bootstrap: bootstrap::Bootstrap.view(&model.bootstrap),
             history: history::History.view(&model.history),
+            workspace: workspace::Workspace.view(&model.workspace),
         }
     }
 }
