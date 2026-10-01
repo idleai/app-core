@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
+use crate::subscriptions::{SubscriptionOperation, SubscriptionOutput};
 use crate::workspace::{WorkspaceOperation, WorkspaceOutput};
 
 /// Information supplied by the embedding client, not inferred by the core.
@@ -68,6 +69,8 @@ pub enum Effect {
     History(Box<Request<Query>>),
     /// Execute authorized workspace discovery, membership or presence reads.
     Workspace(Box<Request<WorkspaceOperation>>),
+    /// Execute authorized joins, buffered change watches, release or retry timers.
+    Subscription(Box<Request<SubscriptionOperation>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -96,6 +99,12 @@ impl From<Request<WorkspaceOperation>> for Effect {
     }
 }
 
+impl From<Request<SubscriptionOperation>> for Effect {
+    fn from(request: Request<SubscriptionOperation>) -> Self {
+        Self::Subscription(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -108,13 +117,15 @@ pub enum EffectFfi {
     History(Box<Query>),
     /// Return a workspace result for this request ID.
     Workspace(Box<WorkspaceOperation>),
+    /// Return a subscription response for this request ID.
+    Subscription(Box<SubscriptionOperation>),
 }
 
 impl EffectFfi {
     pub(crate) const fn expects_response(&self) -> bool {
         match self {
             Self::Render => false,
-            Self::HostInfo | Self::History(_) | Self::Workspace(_) => true,
+            Self::HostInfo | Self::History(_) | Self::Workspace(_) | Self::Subscription(_) => true,
         }
     }
 
@@ -133,6 +144,10 @@ impl EffectFfi {
                 let _result: WorkspaceOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
+            Self::Subscription(_) => {
+                let _result: SubscriptionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
         }
     }
 }
@@ -149,6 +164,9 @@ impl EffectFFI for Effect {
             }
             Self::Workspace(request) => {
                 request.serialize(|operation| EffectFfi::Workspace(Box::new(operation)))
+            }
+            Self::Subscription(request) => {
+                request.serialize(|operation| EffectFfi::Subscription(Box::new(operation)))
             }
         }
     }

@@ -144,4 +144,4 @@ smoke programs exercise both modes through generated codecs, including full-widt
 revisions, members, presence expiry, navigation and typed failures.
 
 Run `./scripts/lint.sh` and `./scripts/check.sh`. Regenerate host payload bindings
-for shell protocol 4; coordination JSON protocol v1 is unchanged.
+for shell protocol 5; coordination JSON protocol v1 is unchanged.

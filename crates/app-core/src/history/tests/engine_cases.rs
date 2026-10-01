@@ -15,7 +15,7 @@ use crate::{
     },
 };
 
-fn run(core: &Core, queries: &mut ChainQueries, event: Event) {
+pub(super) fn run(core: &Core, queries: &mut ChainQueries, event: Event) {
     for mut request in send(core, event) {
         let result = history::engine::execute(queries, "chain", &request.operation);
         let follow_up = core.resolve(&mut request, result).expect("host result");
@@ -26,7 +26,7 @@ fn run(core: &Core, queries: &mut ChainQueries, event: Event) {
     }
 }
 
-fn operation_details(core: &Core, operation: u8) -> OperationDetails {
+pub(super) fn operation_details(core: &Core, operation: u8) -> OperationDetails {
     let entry = core
         .view()
         .history

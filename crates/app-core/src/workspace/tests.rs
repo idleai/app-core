@@ -83,7 +83,10 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<WorkspaceOperation>> {
         .into_iter()
         .filter_map(|effect| match effect {
             Effect::Workspace(request) => Some(*request),
-            Effect::Render(_) | Effect::HostInfo(_) | Effect::History(_) => None,
+            Effect::Render(_)
+            | Effect::HostInfo(_)
+            | Effect::History(_)
+            | Effect::Subscription(_) => None,
         })
         .collect()
 }

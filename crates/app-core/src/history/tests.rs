@@ -2,6 +2,8 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 mod engine_cases;
+#[cfg(not(target_arch = "wasm32"))]
+mod reconciliation_cases;
 mod state_cases;
 mod wire_cases;
 
@@ -63,7 +65,10 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<Query>> {
         .into_iter()
         .filter_map(|effect| match effect {
             Effect::History(request) => Some(*request),
-            Effect::Render(_) | Effect::HostInfo(_) | Effect::Workspace(_) => None,
+            Effect::Render(_)
+            | Effect::HostInfo(_)
+            | Effect::Workspace(_)
+            | Effect::Subscription(_) => None,
         })
         .collect()
 }
@@ -80,16 +85,20 @@ fn first(requests: Vec<Request<Query>>) -> Request<Query> {
 }
 
 fn page(core: &Core, request: &mut Request<Query>, ops: &[Op], next: Option<OpId>) {
-    let follow_up = core
-        .resolve(
-            request,
-            Ok(QueryResult::History(HistoryPage {
-                observations: ops.iter().map(observation).collect(),
-                next_after: next.map(|id| id.to_string()),
-                scanned: u32::try_from(ops.len()).expect("bounded page"),
-            })),
-        )
-        .expect("resolve page");
+    let page = HistoryPage {
+        observations: ops.iter().map(observation).collect(),
+        next_after: next.map(|id| id.to_string()),
+        scanned: u32::try_from(ops.len()).expect("bounded page"),
+    };
+    let result = if matches!(request.operation.action, super::QueryAction::Reconcile(_)) {
+        QueryResult::Reconciled(Box::new(super::Reconciled {
+            history: vec![page],
+            ..super::Reconciled::default()
+        }))
+    } else {
+        QueryResult::History(page)
+    };
+    let follow_up = core.resolve(request, Ok(result)).expect("resolve page");
     assert!(
         requests(follow_up).is_empty(),
         "paging is controlled by client events"
