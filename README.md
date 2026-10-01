@@ -1,7 +1,7 @@
 # app-core
 
 Shared Rust application state for Idle. Crux reducers manage history, workspace
-navigation, owned/invited sessions, projections and subscription recovery. Hosts execute typed effects and render
+navigation, owned/invited sessions, resources, projections and subscription recovery. Hosts execute typed effects and render
 views; storage, transports, inference and authorization enforcement stay with
 their owning hosts and services.
 
@@ -12,7 +12,7 @@ their owning hosts and services.
 | [idle-protocol](crates/idle-protocol) | Versioned coordination contracts, independent of Crux. |
 | [idle-history](crates/idle-history) | Portable history and connection state shared with the legacy EditChain viewer. |
 
-Resource and settings modules are still placeholders.
+The settings module remains a placeholder.
 
 Check out `idleai/editchain` at `../editchain` and `idleai/web-ui` at `../web-ui`.
 The engine workspace also requires web-ui's shared history geometry manifest
@@ -38,7 +38,7 @@ and Swift/Kotlin round trips through the native library. Apple/Android device
 builds require their platform SDKs separately.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **7** requires matching native bindings and
+under ignored `dist/`. Shell protocol **8** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:
@@ -47,6 +47,7 @@ Integration guides:
 - [History](docs/history.md) — selection, search, paging and recorded content.
 - [Workspaces](docs/workspace.md) — repository bindings, members and presence.
 - [Sessions](docs/sessions.md) — creation, sharing, explicit history bindings and attributed input.
+- [Resources](docs/resources.md) — compute/providers, model actions, progress and controller status.
 - [Projections](docs/projections.md) — shared inputs, activity/task/error/triage/need-input views and controller mapping.
 - [Subscriptions](docs/subscriptions.md) — joins, reconnects and snapshot reconciliation.
 - [Coordination protocol](crates/idle-protocol/README.md) — public contracts and JSON Schema.

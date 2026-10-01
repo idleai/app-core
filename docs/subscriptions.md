@@ -44,6 +44,13 @@ empty success when nothing changed.
 adapter. `Unauthorized` clears the scoped history and stops retrying. Providers
 still enforce access; the core's context and status do not grant permissions.
 
+Resource discovery also refreshes after a buffered join or `Changed` notification.
+Hosts must include resource health, membership/grant changes, controller ownership
+and runtime model/action changes in those notifications. Resource refreshes
+coalesce while a read is pending. Connection loss retires resource continuations;
+reconnect loads authorized discovery before checking outstanding action identities.
+See [resources](resources.md) for expiry clocks and mutation recovery.
+
 ## Replacement reads
 
 `history::QueryAction::Reconcile` describes the previously loaded history/search

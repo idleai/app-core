@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
 use crate::projections::{ProjectionOutput, ProjectionQuery};
+use crate::resources::{ResourceOperation, ResourceOutput};
 use crate::sessions::{SessionOperation, SessionOutput};
 use crate::subscriptions::{SubscriptionOperation, SubscriptionOutput};
 use crate::workspace::{WorkspaceOperation, WorkspaceOutput};
@@ -77,6 +78,8 @@ pub enum Effect {
     Session(Box<Request<SessionOperation>>),
     /// Read a replacement of all five projection destinations.
     Projection(Box<Request<ProjectionQuery>>),
+    /// Discover resources or execute/reconcile an authorized runtime action.
+    Resource(Box<Request<ResourceOperation>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -123,6 +126,12 @@ impl From<Request<ProjectionQuery>> for Effect {
     }
 }
 
+impl From<Request<ResourceOperation>> for Effect {
+    fn from(request: Request<ResourceOperation>) -> Self {
+        Self::Resource(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -141,6 +150,8 @@ pub enum EffectFfi {
     Session(Box<SessionOperation>),
     /// Return a projection response for this request ID.
     Projection(Box<ProjectionQuery>),
+    /// Return a resource response for this request ID.
+    Resource(Box<ResourceOperation>),
 }
 
 impl EffectFfi {
@@ -152,7 +163,8 @@ impl EffectFfi {
             | Self::Workspace(_)
             | Self::Subscription(_)
             | Self::Session(_)
-            | Self::Projection(_) => true,
+            | Self::Projection(_)
+            | Self::Resource(_) => true,
         }
     }
 
@@ -177,6 +189,10 @@ impl EffectFfi {
             }
             Self::Session(_) => {
                 let _result: SessionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
+            Self::Resource(_) => {
+                let _result: ResourceOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
             Self::Projection(_) => {
@@ -205,6 +221,9 @@ impl EffectFFI for Effect {
             }
             Self::Session(request) => {
                 request.serialize(|operation| EffectFfi::Session(Box::new(operation)))
+            }
+            Self::Resource(request) => {
+                request.serialize(|operation| EffectFfi::Resource(Box::new(operation)))
             }
             Self::Projection(request) => {
                 request.serialize(|operation| EffectFfi::Projection(Box::new(operation)))

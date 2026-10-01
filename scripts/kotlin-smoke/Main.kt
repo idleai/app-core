@@ -93,6 +93,44 @@ import ai.idle.appcore.types.ProjectionResponse
 import ai.idle.appcore.types.ProjectionRow
 import ai.idle.appcore.types.ProjectionSnapshot
 
+import ai.idle.appcore.types.ResourceContext
+import ai.idle.appcore.types.ResourceOperation
+import ai.idle.appcore.types.ResourceOperationKind
+import ai.idle.appcore.types.ResourceHealth
+import ai.idle.appcore.types.ResourceAvailability
+import ai.idle.appcore.types.ComputeHostInfo
+import ai.idle.appcore.types.ComputeFeature
+import ai.idle.appcore.types.ModelProviderInfo
+import ai.idle.appcore.types.ModelProviderKind
+import ai.idle.appcore.types.ServedModelInfo
+import ai.idle.appcore.types.ModelKey
+import ai.idle.appcore.types.ModelFeature
+import ai.idle.appcore.types.ModelTarget
+import ai.idle.appcore.types.ControllerOwnership
+import ai.idle.appcore.types.ControllerLease
+import ai.idle.appcore.types.ModelPackage
+import ai.idle.appcore.types.ResourceRuntimeInfo
+import ai.idle.appcore.types.ResourceCapabilities
+import ai.idle.appcore.types.ResourceCapability
+import ai.idle.appcore.types.ModelSelection
+import ai.idle.appcore.types.ControllerRuntime
+import ai.idle.appcore.types.ControllerPhase
+import ai.idle.appcore.types.ResourceGrant
+import ai.idle.appcore.types.ResourceScope
+import ai.idle.appcore.types.ResourcePermission
+import ai.idle.appcore.types.ResourceSnapshot
+import ai.idle.appcore.types.ResourceResponse
+import ai.idle.appcore.types.ResourceResult
+import ai.idle.appcore.types.ResourceRequest
+import ai.idle.appcore.types.ResourceMutation
+import ai.idle.appcore.types.ResourceEvent
+import ai.idle.appcore.types.ResourceProgress
+import ai.idle.appcore.types.ResourceActionStage
+import ai.idle.appcore.types.ResourceError
+import ai.idle.appcore.types.ResourceErrorCode
+import ai.idle.appcore.types.ResourceRetryAdvice
+import ai.idle.appcore.types.ControllerAssignment
+
 private fun view(core: AppCore): ViewModel = ViewModel.bincodeDeserialize(core.view())
 
 private fun send(core: AppCore, event: Event): List<EffectRequest> =
@@ -116,7 +154,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 7u)
+    check(core.protocolVersion() == 8u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -127,7 +165,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     val effects = send(core, Event.Start)
     val id = effects.request(EffectFfi.HostInfo)
     val renderId = effects.first { it.effect == EffectFfi.Render }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -137,7 +175,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
     check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
@@ -286,6 +324,45 @@ private fun projectionSmoke() = AppCore().use { client ->
     check(view(client).projections.tasks.freshness.status == FreshnessStatus.STALE)
 }
 
+private fun resourceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
+    val context = ResourceContext("resources", "workspace", "bob", "chain", mode)
+    val load = send(client, Event.Resources(ResourceEvent.Connect(context)))
+        .request(EffectFfi.Resource(ResourceOperation(context, ResourceOperationKind.Snapshot)))
+    val health = ResourceHealth(ResourceAvailability.AVAILABLE, 900uL, 2500uL)
+    val host = ComputeHostInfo("host", "alice", "Shared host", 1uL, listOf(ComputeFeature.SESSIONS, ComputeFeature.LOCALMODELS), health)
+    val provider = ModelProviderInfo("provider", "alice", "Local provider", 1uL, ModelProviderKind.Local("host", "runtime"), health)
+    val model = ServedModelInfo(ModelKey("provider", "model"), "Coding model", 1uL, listOf(ModelFeature.TEXT, ModelFeature.TOOLS), health)
+    val target = ModelTarget("control", "host", "runtime", ULong.MAX_VALUE)
+    val ownership = ControllerOwnership(ULong.MAX_VALUE, ControllerLease(target, 800uL, 3000uL))
+    val pkg = ModelPackage("local-coder", "Coder 🌍", "host", "runtime")
+    val runtime = ResourceRuntimeInfo(ResourceCapabilities(ResourceCapability.AVAILABLE, ResourceCapability.AVAILABLE, ResourceCapability.AVAILABLE), listOf(ModelSelection(target, null, ResourceCapability.AVAILABLE)), listOf(pkg), ControllerRuntime(target, ControllerPhase.Running, health))
+    val grants = listOf(ResourceGrant("compute", 1uL, ResourceScope.Host("host"), listOf(ResourcePermission.CONNECTHOST, ResourcePermission.INSTALLMODEL), null, true), ResourceGrant("provider", 1uL, ResourceScope.Provider("provider"), listOf(ResourcePermission.USEMODELS), null, true))
+    val snapshot = ResourceSnapshot(context, "stream", ULong.MAX_VALUE, 1000uL, true, listOf(host), listOf(provider), listOf(model), grants, ownership, runtime)
+    respond(client, load, ResourceResponse.Ok(ResourceResult.Snapshot(snapshot)).bincodeSerialize())
+    check(view(client).resources.controller.ownership.lastEpoch == ULong.MAX_VALUE)
+    check(view(client).resources.controller.phase == ControllerPhase.Running)
+    check(view(client).resources.models.single().selectableFor == listOf(target))
+    check(view(client).resources.packages.single().canInstall)
+    check(view(client).resources.packages.single().packageInfo.name == "Coder 🌍")
+    val identity = ResourceRequest("install", 2000uL)
+    val mutation = ResourceMutation.InstallModel(pkg)
+    val install = send(client, Event.Resources(ResourceEvent.Execute(identity, mutation)))
+        .request(EffectFfi.Resource(ResourceOperation(context, ResourceOperationKind.Mutate(identity, mutation))))
+    check(view(client).resources.mutations.single().pending)
+    check(!view(client).resources.packages.single().canInstall)
+    respond(client, install, ResourceResponse.Ok(ResourceResult.Progress(ResourceProgress(context, identity, 1uL, ResourceActionStage.Received))).bincodeSerialize())
+    check(view(client).resources.mutations.single().pending)
+    val status = send(client, Event.Resources(ResourceEvent.CheckStatus("install")))
+        .request(EffectFfi.Resource(ResourceOperation(context, ResourceOperationKind.Status(identity))))
+    val failure = ResourceError(ResourceErrorCode.UNAVAILABLE, "Insufficient disk space 🌍", ResourceRetryAdvice.Never)
+    respond(client, status, ResourceResponse.Ok(ResourceResult.Progress(ResourceProgress(context, identity, 2uL, ResourceActionStage.Failed(failure)))).bincodeSerialize())
+    check(!view(client).resources.mutations.single().pending)
+    check(view(client).resources.mutations.single().progress?.stage == ResourceActionStage.Failed(failure))
+    send(client, Event.Resources(ResourceEvent.AdvanceClock(3000uL)))
+    check(view(client).resources.controller.assignment == ControllerAssignment.EXPIRED)
+    check(view(client).resources.models.single().availability == ResourceAvailability.UNKNOWN)
+}
+
 fun main() {
     val core = AppCore()
     core.use { AppCore().use { other -> exercise(core, other) } }
@@ -297,10 +374,13 @@ fun main() {
     sessionSmoke(WorkspaceMode.STANDALONE)
     sessionSmoke(WorkspaceMode.MANAGED)
     projectionSmoke()
+    resourceSmoke(WorkspaceMode.STANDALONE)
+    resourceSmoke(WorkspaceMode.MANAGED)
     println("Kotlin/JVM + JNI + Facet: event -> effect -> result -> typed view PASS")
     println("Kotlin/JVM operation records/content request -> result PASS")
     println("Kotlin/JVM workspace selection + members + presence in both modes PASS")
     println("Kotlin/JVM subscription join + snapshot + stale watch PASS")
     println("Kotlin/JVM session attribution + receipt + runtime completion + expiry in both modes PASS")
     println("Kotlin/JVM projection inputs + references + freshness + filtering PASS")
+    println("Kotlin/JVM resource actions + progress + controller epochs/expiry in both modes PASS")
 }

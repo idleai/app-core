@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `7`; includes history, workspace, subscription, session and projection payloads. |
+| `protocol_version()` | Returns `8`; includes history, workspace, subscription, session, projection and resource payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse` or `ProjectionResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse` or `ResourceResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -86,6 +86,12 @@ engine reads, controller mapping and the five typed destinations. Protocol 7 add
 `Event::Projections`, `Effect::Projection` and the root `projections` view. Hosts
 must add the effect arm and regenerate matching codecs; the JSON coordination
 protocol remains v1. Development fixtures require `projection-fixtures`.
+
+See [resource integration](resources.md) for workspace-bound compute/providers,
+model selection/installation and controller status. Protocol 8 adds
+`Event::Resources`, `Effect::Resource` and the root `resources` view. Hosts must
+handle the new effect and regenerate codecs with the native library. Runtime
+actions remain unavailable until connected; `resource-fixtures` is development-only.
 
 Build with `bash scripts/build-bindings.sh`; prerequisites are in
 [the README](../README.md). The build replaces generated `dist/` contents.

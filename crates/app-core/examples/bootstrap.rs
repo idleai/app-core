@@ -25,7 +25,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             Effect::Subscription(_)
             | Effect::Workspace(_)
             | Effect::Session(_)
-            | Effect::Projection(_) => {
+            | Effect::Projection(_)
+            | Effect::Resource(_) => {
                 return Err(io::Error::other("unexpected workspace operation").into());
             }
             Effect::HostInfo(mut request) => {
