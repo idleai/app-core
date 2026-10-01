@@ -1,4 +1,4 @@
-//! Workspace Control leases and fencing evidence for execution/history writes.
+//! Workspace Control leases, ownership epochs and validation for execution/history writes.
 
 use std::num::NonZeroU32;
 

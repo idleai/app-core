@@ -19,6 +19,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     for effect in core.process_event(Event::Start) {
         match effect {
             Effect::Render(_) => {}
+            Effect::History(_) => {
+                return Err(io::Error::other("unexpected history operation").into());
+            }
+            Effect::Workspace(_) => {
+                return Err(io::Error::other("unexpected workspace operation").into());
+            }
             Effect::HostInfo(mut request) => {
                 // Host adapter work happens here, outside the reducer.
                 let result = HostInfo {
@@ -45,3 +51,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     Ok(())
 }
+
+use editchain_core as _;
+#[cfg(not(target_arch = "wasm32"))]
+use editchain_engine as _;
+use idle_history as _;
+use idle_protocol as _;
+use serde_json as _;
+use tempfile as _;

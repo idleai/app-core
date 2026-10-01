@@ -9,8 +9,36 @@ import ai.idle.appcore.types.EffectRequest
 import ai.idle.appcore.types.Event
 import ai.idle.appcore.types.HostInfo
 import ai.idle.appcore.types.HostInfoResponse
+import ai.idle.appcore.types.HistoryEvent
+import ai.idle.appcore.types.HistoryPage
+import ai.idle.appcore.types.OperationDetails
+import ai.idle.appcore.types.OperationDetailsState
+import ai.idle.appcore.types.Query
+import ai.idle.appcore.types.QueryAction
+import ai.idle.appcore.types.QueryResponse
+import ai.idle.appcore.types.QueryResult
+import ai.idle.appcore.types.RequestState
+import ai.idle.appcore.types.RecordLookupStatus
 import ai.idle.appcore.types.LoadState
 import ai.idle.appcore.types.ViewModel
+import ai.idle.appcore.types.MemberInfo
+import ai.idle.appcore.types.MemberRole
+import ai.idle.appcore.types.MemberStatus
+import ai.idle.appcore.types.NavigationSection
+import ai.idle.appcore.types.PresenceEntry
+import ai.idle.appcore.types.PresenceSnapshot
+import ai.idle.appcore.types.PresenceStatus
+import ai.idle.appcore.types.RepositoryInfo
+import ai.idle.appcore.types.WorkspaceError
+import ai.idle.appcore.types.WorkspaceErrorKind
+import ai.idle.appcore.types.WorkspaceEvent
+import ai.idle.appcore.types.WorkspaceInfo
+import ai.idle.appcore.types.WorkspaceMode
+import ai.idle.appcore.types.WorkspaceOperation
+import ai.idle.appcore.types.WorkspaceRequestState
+import ai.idle.appcore.types.WorkspaceResponse
+import ai.idle.appcore.types.WorkspaceResult
+import ai.idle.appcore.types.WorkspaceSnapshot
 
 private fun view(core: AppCore): ViewModel = ViewModel.bincodeDeserialize(core.view())
 
@@ -33,8 +61,9 @@ private fun rejected(action: () -> Unit) {
 }
 
 private fun exercise(core: AppCore, other: AppCore) {
-    val idle = ViewModel(initialized = false, bootstrap = LoadState.Idle)
-    check(core.protocolVersion() == 2u)
+    val idle = view(core)
+    check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
+    check(core.protocolVersion() == 4u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -43,9 +72,9 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.processEvent(byteArrayOf(1, 0, 0, 0, 1, 0, 0, 0)) }
 
     val effects = send(core, Event.Start)
-    val id = effects.request(EffectFfi.HOSTINFO)
-    val renderId = effects.first { it.effect == EffectFfi.RENDER }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading))
+    val id = effects.request(EffectFfi.HostInfo)
+    val renderId = effects.first { it.effect == EffectFfi.Render }.id
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -54,22 +83,72 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(UInt.MAX_VALUE, success) }
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
-    check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.RENDER))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info)))
+    check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
-    val failedId = send(other, Event.Start).request(EffectFfi.HOSTINFO)
+    val failedId = send(other, Event.Start).request(EffectFfi.HostInfo)
     val failure = EffectError(message = "Host unavailable 🌍")
     val failureBytes = HostInfoResponse.Err(failure).bincodeSerialize()
-    check(respond(other, failedId, failureBytes).map { it.effect } == listOf(EffectFfi.RENDER))
+    check(respond(other, failedId, failureBytes).map { it.effect } == listOf(EffectFfi.Render))
     check(view(other).bootstrap == LoadState.Failed(failure))
-    val retryId = send(other, Event.Bootstrap(BootstrapEvent.LOAD)).request(EffectFfi.HOSTINFO)
+    val retryId = send(other, Event.Bootstrap(BootstrapEvent.LOAD)).request(EffectFfi.HostInfo)
     check(retryId != failedId)
     rejected { other.handleResponse(failedId, success) }
-    check(respond(other, retryId, success).map { it.effect } == listOf(EffectFfi.RENDER))
+    check(respond(other, retryId, success).map { it.effect } == listOf(EffectFfi.Render))
     check(view(other).bootstrap == LoadState.Ready(info))
     check(view(core).bootstrap == LoadState.Ready(info))
+    val history = send(core, Event.History(HistoryEvent.Connect("chain"))).single { it.effect is EffectFfi.History }
+    check((history.effect as EffectFfi.History).value.chain == "chain")
+    check(view(core).history.paging.state == RequestState.Loading)
+    val page = QueryResponse.Ok(QueryResult.History(HistoryPage(observations = emptyList(), nextAfter = null, scanned = 0u)))
+    respond(core, history.id, page.bincodeSerialize())
+    check(view(core).history.paging.state == RequestState.Ready)
+    check(view(core).history.paging.exhausted)
+    check(view(other).history.chain == null)
+    val missingOperation = "a".repeat(64)
+    val detailId = send(core, Event.History(HistoryEvent.LoadOperationDetails(missingOperation, false)))
+        .request(EffectFfi.History(Query("chain", QueryAction.OperationDetails(missingOperation))))
+    val details = OperationDetails(missingOperation, RecordLookupStatus.MISSING, null, emptyList(), emptyList(), null)
+    respond(core, detailId, QueryResponse.Ok(QueryResult.OperationDetails(details)).bincodeSerialize())
+    check(view(core).history.operationDetails.single().state == OperationDetailsState.Ready(details))
+}
+
+private fun workspaceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
+    val listId = send(client, Event.Workspace(WorkspaceEvent.Load)).request(EffectFfi.Workspace(WorkspaceOperation.List))
+    val repo = RepositoryInfo(id = "repo", name = "Repository", remote = null)
+    val info = WorkspaceInfo(id = "workspace", name = "Workspace 🌍", chain = "logical-chain",
+        revision = ULong.MAX_VALUE, mode = mode, repositories = listOf(repo))
+    respond(client, listId, WorkspaceResponse.Ok(WorkspaceResult.Directory(listOf(info))).bincodeSerialize())
+    check(view(client).workspace.workspaces == listOf(info))
+    val selected = send(client, Event.Workspace(WorkspaceEvent.SelectWorkspace("workspace")))
+    val snapshotId = selected.request(EffectFfi.Workspace(WorkspaceOperation.Snapshot("workspace", mode)))
+    val engine = selected.single { it.effect is EffectFfi.History }
+    check((engine.effect as EffectFfi.History).value.chain == "logical-chain")
+    respond(client, engine.id, QueryResponse.Ok(QueryResult.History(HistoryPage(emptyList(), null, 0u))).bincodeSerialize())
+    val member = MemberInfo("alice", "Alice", ULong.MAX_VALUE, MemberRole.MEMBER, MemberStatus.ACTIVE)
+    val snapshot = WorkspaceSnapshot(info, listOf(member), listOf("host"), listOf("provider"))
+    val followup = respond(client, snapshotId, WorkspaceResponse.Ok(WorkspaceResult.Snapshot(snapshot)).bincodeSerialize())
+    val presenceId = followup.request(EffectFfi.Workspace(WorkspaceOperation.Presence("workspace", mode)))
+    val entry = PresenceEntry(connectionId = "connection", contributorId = "alice", status = PresenceStatus.ONLINE,
+        repositoryId = "repo", branch = "main", file = "src/lib.rs", hostId = "host", summary = "Editing",
+        observedAtMs = 100uL, validUntilMs = 200uL)
+    val presence = PresenceSnapshot("workspace", 100uL, listOf(entry))
+    respond(client, presenceId, WorkspaceResponse.Ok(WorkspaceResult.Presence(presence)).bincodeSerialize())
+    check(view(client).workspace.members.single().presence == PresenceStatus.ONLINE)
+    check(view(client).workspace.repositoryBinding?.chain == "logical-chain")
+    send(client, Event.Workspace(WorkspaceEvent.Navigate(NavigationSection.AGENTRULES)))
+    check(view(client).workspace.section == NavigationSection.AGENTRULES)
+    send(client, Event.Workspace(WorkspaceEvent.Tick(200uL)))
+    check(view(client).workspace.members.single().presence == PresenceStatus.UNKNOWN)
+    val retryId = send(client, Event.Workspace(WorkspaceEvent.RefreshPresence))
+        .request(EffectFfi.Workspace(WorkspaceOperation.Presence("workspace", mode)))
+    val error = WorkspaceError(WorkspaceErrorKind.UNAVAILABLE, "Presence unavailable")
+    respond(client, retryId, WorkspaceResponse.Err(error).bincodeSerialize())
+    check(view(client).workspace.presenceState == WorkspaceRequestState.Failed(error))
+    send(client, Event.Workspace(WorkspaceEvent.Disconnect))
+    check(view(client).history.chain == null)
 }
 
 fun main() {
@@ -77,5 +156,9 @@ fun main() {
     core.use { AppCore().use { other -> exercise(core, other) } }
     core.close() // Repeated release is safe; calls after release must be rejected.
     check(runCatching { core.view() }.exceptionOrNull() is IllegalStateException)
+    workspaceSmoke(WorkspaceMode.STANDALONE)
+    workspaceSmoke(WorkspaceMode.MANAGED)
     println("Kotlin/JVM + JNI + Facet: event -> effect -> result -> typed view PASS")
+    println("Kotlin/JVM operation records/content request -> result PASS")
+    println("Kotlin/JVM workspace selection + members + presence in both modes PASS")
 }

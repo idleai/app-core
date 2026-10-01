@@ -22,7 +22,7 @@ fn host_info() -> HostInfo {
 fn host_request(effects: Vec<Effect>) -> crux_core::Request<HostInfoOperation> {
     let mut requests = effects.into_iter().filter_map(|effect| match effect {
         Effect::HostInfo(request) => Some(request),
-        Effect::Render(_) => None,
+        Effect::Render(_) | Effect::History(_) | Effect::Workspace(_) => None,
     });
     let request = requests.next().expect("one host request");
     assert!(
@@ -180,7 +180,7 @@ fn binary_shell_round_trip_matches_the_rust_view() {
     );
     assert_eq!(effects.len(), 1, "response requests one render");
     assert_eq!(
-        effects.first().map(|request| request.effect),
+        effects.first().map(|request| request.effect.clone()),
         Some(EffectFfi::Render),
         "render is a notification"
     );
@@ -188,7 +188,8 @@ fn binary_shell_round_trip_matches_the_rust_view() {
         view(&shell),
         ViewModel {
             initialized: true,
-            bootstrap: LoadState::Ready(host_info())
+            bootstrap: LoadState::Ready(host_info()),
+            ..ViewModel::default()
         },
         "the wire view carries typed host information"
     );
@@ -365,7 +366,7 @@ fn concurrent_native_calls_issue_one_bootstrap_operation() {
 }
 
 #[test]
-fn protocol_v2_binary_layout_matches_the_public_types() {
+fn protocol_v4_binary_layout_matches_the_public_types() {
     use crate::effects::{HostInfoResponse, HostInfoResult};
     use crate::shell::{EffectBatch, PROTOCOL_VERSION};
 
@@ -375,7 +376,10 @@ fn protocol_v2_binary_layout_matches_the_public_types() {
         bytes
     }
 
-    assert_eq!(PROTOCOL_VERSION, 2, "binary protocol replaces JSON v1");
+    assert_eq!(
+        PROTOCOL_VERSION, 4,
+        "workspace navigation extends the binary shell protocol"
+    );
     assert_eq!(encode(&Event::Start), START, "stable Start discriminant");
     assert_eq!(
         encode(&Event::Bootstrap(bootstrap::Event::Load)),
@@ -401,7 +405,12 @@ fn protocol_v2_binary_layout_matches_the_public_types() {
         let decoded: HostInfoResult = ShellFormat::deserialize(expected).expect("decode result");
         assert_eq!(decoded, result, "host result decodes without loss");
     }
-    assert_eq!(encode(&ViewModel::default()), [0; 5], "stable initial view");
+    assert_eq!(
+        ShellFormat::deserialize::<ViewModel>(&encode(&ViewModel::default()))
+            .expect("initial view"),
+        ViewModel::default(),
+        "full history view round-trips"
+    );
     let shell = Shell::new();
     let bytes = shell.process_event(START).expect("start");
     let batch: EffectBatch = ShellFormat::deserialize(&bytes).expect("typed batch");

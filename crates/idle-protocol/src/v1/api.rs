@@ -262,8 +262,8 @@ pub struct RuntimeReport {
 ///
 /// Forwarders extract the unchanged `SubmitInput` body from the coordination
 /// command. Evo deduplicates its semantic input, context and fence using the same
-/// request key. A receipt is evidence only over an authenticated delegation
-/// channel, and its key must match `context.key()`.
+/// request key. Recipients must authenticate the delegation channel before
+/// trusting a forwarded receipt, and its key must match `context.key()`.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct RuntimeSubmission {

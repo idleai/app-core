@@ -64,7 +64,7 @@ pub enum EventBody {
     MembershipChanged(Record<Membership>),
     /// Invitation lifecycle advanced.
     InvitationChanged(Record<Invitation>),
-    /// Session directory binding changed; not runtime execution evidence.
+    /// Session directory binding changed; this does not confirm runtime execution.
     SessionChanged(Record<Session>),
     /// Compute publication/health changed in this workspace.
     HostChanged(Record<ComputeHost>),
