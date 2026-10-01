@@ -4,7 +4,8 @@ use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bootstrap, effects::Effect, history, projections, resources, sessions, subscriptions, workspace,
+    bootstrap, configuration, effects::Effect, history, projections, resources, sessions,
+    subscriptions, workspace,
 };
 
 /// State owned by one client, partitioned by domain reducer.
@@ -18,6 +19,7 @@ pub struct Model {
     sessions: sessions::Model,
     projections: projections::Model,
     resources: resources::Model,
+    configuration: configuration::Model,
 }
 
 /// Client actions and domain events accepted by the application.
@@ -40,6 +42,8 @@ pub enum Event {
     Projections(projections::Event),
     /// Route compute/provider discovery, model actions and controller state.
     Resources(resources::Event),
+    /// Route versioned settings and agent-rule editors.
+    Configuration(configuration::Event),
 }
 
 /// The typed presentation state shared by all client surfaces.
@@ -65,6 +69,8 @@ pub struct ViewModel {
     pub projections: projections::ViewModel,
     /// Resource availability, allowed model actions, progress and controller status.
     pub resources: resources::ViewModel,
+    /// Versioned settings and rules, pending drafts and provider save feedback.
+    pub configuration: configuration::ConfigurationViewModel,
 }
 
 /// Root reducer composing the shared application's domain modules.
@@ -119,6 +125,7 @@ impl App for IdleApp {
             Event::Subscriptions(event) => return update_subscription(event, model),
             Event::Projections(event) => return update_projection(event, model),
             Event::Resources(event) => return update_resources(event, model),
+            Event::Configuration(event) => return update_configuration(event, model),
             Event::Sessions(event) => {
                 if let sessions::Event::Connect(context) = &event
                     && ((model.workspace.owns_history()
@@ -167,6 +174,10 @@ impl App for IdleApp {
                 );
                 let command = command.and(update_projection(projections::Event::Disconnect, model));
                 let command = command.and(update_resources(resources::Event::Disconnect, model));
+                let command = command.and(update_configuration(
+                    configuration::Event::Disconnect,
+                    model,
+                ));
                 model.history.bind(None);
                 let event = after
                     .0
@@ -193,6 +204,7 @@ impl App for IdleApp {
             sessions: sessions::Sessions.view(&model.sessions),
             projections: projections::Projections.view(&model.projections),
             resources: resources::Resources.view(&model.resources),
+            configuration: configuration::Configuration.view(&model.configuration),
         }
     }
 }
@@ -257,7 +269,43 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
     } else {
         command
     };
+    let command = if before.as_ref() != after
+        && model.configuration.context().is_some_and(|context| {
+            !after.is_some_and(|active| configuration_subscription_matches(context, active))
+        }) {
+        command.and(
+            configuration::Configuration
+                .update(configuration::Event::Disconnect, &mut model.configuration)
+                .map_event(Event::Configuration),
+        )
+    } else {
+        command
+    };
     if let Some(event) = model.subscriptions.take_history_event() {
+        let configuration_event = match &event {
+            history::Event::Refresh => Some(configuration::Event::Refresh),
+            history::Event::Reconnect => Some(configuration::Event::Reconnect),
+            history::Event::Suspend => Some(configuration::Event::Suspend),
+            history::Event::Disconnect => Some(configuration::Event::Disconnect),
+            history::Event::Connect(_)
+            | history::Event::SetFilter(_)
+            | history::Event::LoadMore
+            | history::Event::Search(_)
+            | history::Event::SearchMore
+            | history::Event::NavigateMatch(_)
+            | history::Event::Select(_)
+            | history::Event::ClearSelection
+            | history::Event::ToggleDisclosure(_)
+            | history::Event::LoadItem(_)
+            | history::Event::LoadOperationDetails { .. }
+            | history::Event::Open { .. }
+            | history::Event::Completed { .. } => None,
+        };
+        let command = if let Some(event) = configuration_event {
+            command.and(update_configuration(event, model))
+        } else {
+            command
+        };
         let projection_event = match &event {
             history::Event::Refresh => Some(projections::Event::Refresh),
             history::Event::Reconnect => Some(projections::Event::Reconnect),
@@ -399,4 +447,43 @@ fn update_resources(event: resources::Event, model: &mut Model) -> Command<Effec
     resources::Resources
         .update(event, &mut model.resources)
         .map_event(Event::Resources)
+}
+
+fn configuration_subscription_matches(
+    context: &configuration::ConfigurationContext,
+    active: &subscriptions::Context,
+) -> bool {
+    context.workspace_id == active.workspace
+        && context.chain == active.chain
+        && context.contributor_id == active.contributor
+        && context.provider == active.provider
+}
+
+fn update_configuration(event: configuration::Event, model: &mut Model) -> Command<Effect, Event> {
+    if let configuration::Event::Connect(context) = &event
+        && ((model.workspace.owns_history()
+            && (model.workspace.chain() != Some(context.chain.as_str())
+                || model.workspace.workspace_id() != Some(context.workspace_id.as_str())
+                || model.workspace.coordination_mode() != Some(context.mode)))
+            || model
+                .subscriptions
+                .context()
+                .is_some_and(|active| !configuration_subscription_matches(context, active)))
+    {
+        return Command::done();
+    }
+    if model.subscriptions.context().is_some() && !model.subscriptions.has_connection() {
+        if let configuration::Event::Connect(context) = &event {
+            model.configuration.wait_for_connection(context.clone());
+            return render::render();
+        }
+        if matches!(event, configuration::Event::Reconnect) {
+            return configuration::Configuration
+                .update(configuration::Event::Suspend, &mut model.configuration)
+                .map_event(Event::Configuration);
+        }
+    }
+    configuration::Configuration
+        .update(event, &mut model.configuration)
+        .map_event(Event::Configuration)
 }

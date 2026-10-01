@@ -27,9 +27,9 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `9`; includes history, workspace, subscription, session, projection and resource payloads. |
+| `protocol_version()` | Returns `10`; includes history, workspace, subscription, session, projection, resource and configuration payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
-| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse` or `ResourceResponse` → encoded `EffectBatch`. |
+| `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse`, `ResourceResponse` or `ConfigurationResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
 
 Use the generated codecs to encode and decode these bytes. Process every returned
@@ -114,3 +114,9 @@ generate bindings and run the host smoke tests. Binary payload layout depends on
 field and variant order: coordinate incompatible changes with hosts and bump
 `PROTOCOL_VERSION`. The Rust wire-layout test and foreign-language round trips
 check codec compatibility.
+
+See [configuration integration](configuration.md) for independent versioned settings
+and agent-rule editors. Protocol 10 adds `Event::Configuration`,
+`Effect::Configuration`, `ConfigurationResponse` and the root `configuration` view.
+Hosts route loads and conditional saves through either coordination provider;
+Offstage owns managed persistence and Evo owns rule enforcement.

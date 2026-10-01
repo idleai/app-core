@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 9)
+check(core.protocolVersion() == 10)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -55,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources, configuration: idle.configuration))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 
@@ -290,3 +290,39 @@ func resourceSmoke(_ mode: WorkspaceMode) throws {
 try resourceSmoke(.standalone)
 try resourceSmoke(.managed)
 print("Swift resource actions + progress + restoration + controller epochs/expiry in both modes PASS")
+
+func configurationSmoke(_ mode: WorkspaceMode) throws {
+    let client = AppCore()
+    let context = ConfigurationContext(provider: "configuration", workspaceId: "workspace", contributorId: "alice", chain: "chain", mode: mode)
+    let loads = try send(client, .configuration(.connect(context)))
+    for document in [ConfigurationDocument.settings, .agentRules] {
+        let operation = ConfigurationOperation(context: context, document: document, action: .load)
+        let load = try request(loads, .configuration(operation))
+        let record = ConfigurationRecord(revision: UInt64.max - 1, value: ConfigurationValue(schemaVersion: 1, json: "{}"))
+        let snapshot = ConfigurationSnapshot(context: context, document: document, record: record, canEdit: true)
+        _ = try client.handleResponse(id: load, response: Data(ConfigurationResponse.ok(.loaded(snapshot)).bincodeSerialize()))
+    }
+    check(try view(client).configuration.settings.baseRevision == UInt64.max - 1)
+    let json = "{\"name\":\"Workspace 🌍\"}"
+    _ = try send(client, .configuration(.edit(document: .settings, json: json)))
+    let identity = ConfigurationRequest(requestId: "settings-save", expiresAtMs: 1000)
+    let value = ConfigurationValue(schemaVersion: 1, json: json)
+    let save = ConfigurationSave(request: identity, expectedRevision: UInt64.max - 1, value: value)
+    let operation = ConfigurationOperation(context: context, document: .settings, action: .save(save))
+    let pending = try request(send(client, .configuration(.save(document: .settings, request: identity))), .configuration(operation))
+    check(try view(client).configuration.settings.save == .saving)
+    _ = try send(client, .configuration(.edit(document: .settings, json: "{\"newer\":true}")))
+    let snapshot = ConfigurationSnapshot(context: context, document: .settings, record: ConfigurationRecord(revision: UInt64.max, value: value), canEdit: true)
+    _ = try client.handleResponse(id: pending, response: Data(ConfigurationResponse.ok(.saved(request: identity, snapshot: snapshot)).bincodeSerialize()))
+    let editor = try view(client).configuration.settings
+    check(editor.save == .saved(UInt64.max) && editor.dirty && editor.pending == nil)
+    check(editor.draft.json == "{\"newer\":true}" && editor.baseRevision == UInt64.max)
+    _ = try send(client, .configuration(.edit(document: .agentRules, json: "[]")))
+    check(try view(client).configuration.agentRules.validationError?.kind == .invalidInput)
+    check(try view(client).configuration.agentRules.actions.contains(.save) == false)
+    _ = try send(client, .configuration(.discard(.agentRules)))
+    check(try view(client).configuration.agentRules.dirty == false)
+}
+try configurationSmoke(.standalone)
+try configurationSmoke(.managed)
+print("Swift configuration drafts + conditional saves + full revisions in both modes PASS")

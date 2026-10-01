@@ -81,7 +81,8 @@ fn request(effects: Vec<Effect>) -> Request<ProjectionQuery> {
             | Effect::Workspace(_)
             | Effect::Subscription(_)
             | Effect::Session(_)
-            | Effect::Resource(_) => None,
+            | Effect::Resource(_)
+            | Effect::Configuration(_) => None,
         })
         .expect("projection request")
 }
