@@ -21,14 +21,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/editchain
-          ref: 3c75cf0f8248c8d1d59f6c6740c60d2ed4880b69
+          ref: ef6206bb0c80c398102303529129662f74660c21
           path: editchain
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          repository: idleai/web-ui
-          ref: 43fc92ffeb8c150cbf2f820ce2ba0777e90b3e60
-          path: web-ui
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -71,19 +65,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/editchain
-          ref: 3c75cf0f8248c8d1d59f6c6740c60d2ed4880b69
+          ref: ef6206bb0c80c398102303529129662f74660c21
           path: editchain
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: idleai/web-ui
-          ref: 43fc92ffeb8c150cbf2f820ce2ba0777e90b3e60
+          ref: a06a207fc6fc3a7f8657ff449957c3db04857258
           path: web-ui
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: idleai/vscode-extension
-          ref: 45f815bc24f73a97ad49315b7a0b25884dcdfcf1
+          ref: c717f35758ea16126f87b4fdb7ca8813587e8986
           path: vscode-extension
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
