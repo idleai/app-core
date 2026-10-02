@@ -1,0 +1,20 @@
+[package]
+name = "editchain-protocol"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shared history view request and response contracts"
+repository = "https://github.com/idleai/app-core"
+readme = "../../README.md"
+keywords = ["crdt", "edit-chain", "agent"]
+categories = ["data-structures", "database-implementations"]
+
+[lints]
+workspace = true
+
+[dependencies]
+idle-history = { path = "../idle-history" }
+editchain-index = { path = "../../../editchain/crates/editchain-index" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+editchain-core = { path = "../../../editchain/crates/editchain-core" }

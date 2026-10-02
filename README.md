@@ -11,10 +11,13 @@ their owning hosts and services.
 | [app-core-bindings](crates/app-core-bindings) | BoltFFI bindings for Swift and Kotlin hosts. |
 | [idle-protocol](crates/idle-protocol) | Versioned coordination contracts, independent of Crux. |
 | [idle-history](crates/idle-history) | Portable history and connection state shared with the legacy EditChain viewer. |
+| [editchain-project](crates/editchain-project) | Semantic history projections, grouping and source identities. |
+| [editchain-protocol](crates/editchain-protocol) | Shared compatibility host/view contracts. |
+| [editchain-client-state](crates/editchain-client-state) | Small Node/WASM binding for the existing peer host. |
 
-Check out `idleai/editchain` at `../editchain` and `idleai/web-ui` at `../web-ui`.
-The engine workspace also requires web-ui's shared history geometry manifest
-when Cargo loads its dependencies. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
+Check out `idleai/editchain` at `../editchain`. This workspace has no renderer
+or VS Code dependency. Graph geometry lives in web-ui; editor request payloads
+live in vscode-extension. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
 WASM target. Run commands from the repository root:
 
 ```sh

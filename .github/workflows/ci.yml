@@ -24,12 +24,6 @@ jobs:
           ref: 3c75cf0f8248c8d1d59f6c6740c60d2ed4880b69
           path: editchain
           persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          repository: idleai/web-ui
-          ref: 43fc92ffeb8c150cbf2f820ce2ba0777e90b3e60
-          path: web-ui
-          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.0
