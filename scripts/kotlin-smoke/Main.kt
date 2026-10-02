@@ -1,4 +1,20 @@
 // Exercise the generated Kotlin API, JNI glue and Facet payload codecs together.
+import ai.idle.appcore.types.ConfigurationContext
+import ai.idle.appcore.types.ConfigurationDocument
+import ai.idle.appcore.types.ConfigurationOperation
+import ai.idle.appcore.types.ConfigurationAction
+import ai.idle.appcore.types.ConfigurationRecord
+import ai.idle.appcore.types.ConfigurationValue
+import ai.idle.appcore.types.ConfigurationSnapshot
+import ai.idle.appcore.types.ConfigurationResponse
+import ai.idle.appcore.types.ConfigurationResult
+import ai.idle.appcore.types.ConfigurationEvent
+import ai.idle.appcore.types.ConfigurationRequest
+import ai.idle.appcore.types.ConfigurationSave
+import ai.idle.appcore.types.ConfigurationSaveState
+import ai.idle.appcore.types.ConfigurationLoadState
+import ai.idle.appcore.types.ConfigurationErrorKind
+import ai.idle.appcore.types.ConfigurationEditorAction
 import ai.idle.appcore.bindings.AppCore
 import ai.idle.appcore.bindings.BindingError
 import ai.idle.appcore.types.BootstrapEvent
@@ -154,7 +170,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 9u)
+    check(core.protocolVersion() == 11u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -165,7 +181,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     val effects = send(core, Event.Start)
     val id = effects.request(EffectFfi.HostInfo)
     val renderId = effects.first { it.effect == EffectFfi.Render }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -175,7 +191,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
     check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 
@@ -380,6 +396,8 @@ private fun resourceSmoke(mode: WorkspaceMode) = AppCore().use { client ->
 }
 
 fun main() {
+    configurationSmoke(WorkspaceMode.STANDALONE)
+    configurationSmoke(WorkspaceMode.MANAGED)
     val core = AppCore()
     core.use { AppCore().use { other -> exercise(core, other) } }
     core.close() // Repeated release is safe; calls after release must be rejected.
@@ -399,4 +417,47 @@ fun main() {
     println("Kotlin/JVM session attribution + receipt + runtime completion + expiry in both modes PASS")
     println("Kotlin/JVM projection inputs + references + freshness + filtering PASS")
     println("Kotlin/JVM resource actions + progress + restoration + controller epochs/expiry in both modes PASS")
+}
+
+private fun configurationSmoke(mode: WorkspaceMode) = AppCore().use { client ->
+    val context = ConfigurationContext("configuration", "workspace", "alice", "chain", mode)
+    val loads = send(client, Event.Configuration(ConfigurationEvent.Connect(context)))
+    for (document in listOf(ConfigurationDocument.SETTINGS, ConfigurationDocument.AGENTRULES)) {
+        val operation = ConfigurationOperation(context, document, ConfigurationAction.Load)
+        val load = loads.request(EffectFfi.Configuration(operation))
+        val record = ConfigurationRecord(ULong.MAX_VALUE - 1uL, ConfigurationValue(1u, "{}"))
+        val snapshot = ConfigurationSnapshot(context, document, record, true)
+        respond(client, load, ConfigurationResponse.Ok(ConfigurationResult.Loaded(snapshot)).bincodeSerialize())
+    }
+    check(view(client).configuration.settings.baseRevision == ULong.MAX_VALUE - 1uL)
+    val json = "{\"name\":\"Workspace 🌍\"}"
+    send(client, Event.Configuration(ConfigurationEvent.Edit(ConfigurationDocument.SETTINGS, json)))
+    val identity = ConfigurationRequest("settings-save", 1000uL)
+    val value = ConfigurationValue(1u, json)
+    val save = ConfigurationSave(identity, ULong.MAX_VALUE - 1uL, value)
+    val operation = ConfigurationOperation(context, ConfigurationDocument.SETTINGS, ConfigurationAction.Save(save))
+    val pending = send(client, Event.Configuration(ConfigurationEvent.Save(ConfigurationDocument.SETTINGS, identity)))
+        .request(EffectFfi.Configuration(operation))
+    check(view(client).configuration.settings.save == ConfigurationSaveState.Saving)
+    send(client, Event.Configuration(ConfigurationEvent.Edit(ConfigurationDocument.SETTINGS, "{\"newer\":true}")))
+    val snapshot = ConfigurationSnapshot(context, ConfigurationDocument.SETTINGS, ConfigurationRecord(ULong.MAX_VALUE, value), true)
+    respond(client, pending, ConfigurationResponse.Ok(ConfigurationResult.Saved(identity, snapshot)).bincodeSerialize())
+    val editor = view(client).configuration.settings
+    check(editor.save == ConfigurationSaveState.Saved(ULong.MAX_VALUE) && editor.dirty && editor.pending == null)
+    check(editor.draft.json == "{\"newer\":true}" && editor.baseRevision == ULong.MAX_VALUE)
+    send(client, Event.Configuration(ConfigurationEvent.Refresh))
+    check(view(client).configuration.settings.load == ConfigurationLoadState.Refreshing)
+    check(view(client).configuration.settings.actions.contains(ConfigurationEditorAction.SAVE))
+    send(client, Event.Configuration(ConfigurationEvent.Rebase(ConfigurationDocument.SETTINGS, ULong.MAX_VALUE - 1uL)))
+    check(view(client).configuration.actionError?.kind == ConfigurationErrorKind.CONFLICT)
+    check(view(client).configuration.settings.baseRevision == ULong.MAX_VALUE)
+    send(client, Event.Configuration(ConfigurationEvent.Rebase(ConfigurationDocument.SETTINGS, ULong.MAX_VALUE)))
+    check(view(client).configuration.actionError == null)
+    check(view(client).configuration.settings.draft.json == "{\"newer\":true}")
+    send(client, Event.Configuration(ConfigurationEvent.Edit(ConfigurationDocument.AGENTRULES, "[]")))
+    check(view(client).configuration.agentRules.validationError?.kind == ConfigurationErrorKind.INVALIDINPUT)
+    check(!view(client).configuration.agentRules.actions.contains(ConfigurationEditorAction.SAVE))
+    send(client, Event.Configuration(ConfigurationEvent.Discard(ConfigurationDocument.AGENTRULES)))
+    check(!view(client).configuration.agentRules.dirty)
+    println("Kotlin configuration drafts + conditional saves + reviewed revisions + background refresh in $mode PASS")
 }

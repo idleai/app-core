@@ -8,6 +8,7 @@ use crux_core::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::configuration::{ConfigurationOperation, ConfigurationOutput};
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
 use crate::projections::{ProjectionOutput, ProjectionQuery};
@@ -80,6 +81,8 @@ pub enum Effect {
     Projection(Box<Request<ProjectionQuery>>),
     /// Discover resources or execute/reconcile an authorized runtime action.
     Resource(Box<Request<ResourceOperation>>),
+    /// Load or conditionally save settings/rules through either provider.
+    Configuration(Box<Request<ConfigurationOperation>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -132,6 +135,12 @@ impl From<Request<ResourceOperation>> for Effect {
     }
 }
 
+impl From<Request<ConfigurationOperation>> for Effect {
+    fn from(request: Request<ConfigurationOperation>) -> Self {
+        Self::Configuration(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -152,6 +161,8 @@ pub enum EffectFfi {
     Projection(Box<ProjectionQuery>),
     /// Return a resource response for this request ID.
     Resource(Box<ResourceOperation>),
+    /// Return a configuration response for this request ID.
+    Configuration(Box<ConfigurationOperation>),
 }
 
 impl EffectFfi {
@@ -164,7 +175,8 @@ impl EffectFfi {
             | Self::Subscription(_)
             | Self::Session(_)
             | Self::Projection(_)
-            | Self::Resource(_) => true,
+            | Self::Resource(_)
+            | Self::Configuration(_) => true,
         }
     }
 
@@ -193,6 +205,10 @@ impl EffectFfi {
             }
             Self::Resource(_) => {
                 let _result: ResourceOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
+            Self::Configuration(_) => {
+                let _result: ConfigurationOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
             Self::Projection(_) => {
@@ -224,6 +240,9 @@ impl EffectFFI for Effect {
             }
             Self::Resource(request) => {
                 request.serialize(|operation| EffectFfi::Resource(Box::new(operation)))
+            }
+            Self::Configuration(request) => {
+                request.serialize(|operation| EffectFfi::Configuration(Box::new(operation)))
             }
             Self::Projection(request) => {
                 request.serialize(|operation| EffectFfi::Projection(Box::new(operation)))

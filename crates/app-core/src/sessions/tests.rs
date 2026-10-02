@@ -152,7 +152,8 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<SessionOperation>> {
             | Effect::Workspace(_)
             | Effect::Subscription(_)
             | Effect::Projection(_)
-            | Effect::Resource(_) => None,
+            | Effect::Resource(_)
+            | Effect::Configuration(_) => None,
         })
         .collect()
 }
