@@ -182,7 +182,13 @@ fn conflict_preserves_draft_until_explicit_rebase_or_discard() {
         !view.actions.contains(&Action::Save),
         "conflict cannot silently overwrite"
     );
-    let _effects = send(&core, Event::Rebase(Document::Settings));
+    let _effects = send(
+        &core,
+        Event::Rebase {
+            document: Document::Settings,
+            reviewed_revision: Some(4),
+        },
+    );
     let view = core.view().configuration.settings;
     assert_eq!(
         view.base_revision,

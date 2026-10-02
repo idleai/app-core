@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 10)
+check(core.protocolVersion() == 11)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -317,6 +317,15 @@ func configurationSmoke(_ mode: WorkspaceMode) throws {
     let editor = try view(client).configuration.settings
     check(editor.save == .saved(UInt64.max) && editor.dirty && editor.pending == nil)
     check(editor.draft.json == "{\"newer\":true}" && editor.baseRevision == UInt64.max)
+    _ = try send(client, .configuration(.refresh))
+    check(try view(client).configuration.settings.load == .refreshing)
+    check(try view(client).configuration.settings.actions.contains(.save))
+    _ = try send(client, .configuration(.rebase(document: .settings, reviewedRevision: UInt64.max - 1)))
+    check(try view(client).configuration.actionError?.kind == .conflict)
+    check(try view(client).configuration.settings.baseRevision == UInt64.max)
+    _ = try send(client, .configuration(.rebase(document: .settings, reviewedRevision: UInt64.max)))
+    check(try view(client).configuration.actionError == nil)
+    check(try view(client).configuration.settings.draft.json == "{\"newer\":true}")
     _ = try send(client, .configuration(.edit(document: .agentRules, json: "[]")))
     check(try view(client).configuration.agentRules.validationError?.kind == .invalidInput)
     check(try view(client).configuration.agentRules.actions.contains(.save) == false)
@@ -325,4 +334,4 @@ func configurationSmoke(_ mode: WorkspaceMode) throws {
 }
 try configurationSmoke(.standalone)
 try configurationSmoke(.managed)
-print("Swift configuration drafts + conditional saves + full revisions in both modes PASS")
+print("Swift configuration drafts + conditional saves + reviewed revisions + background refresh in both modes PASS")

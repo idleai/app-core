@@ -36,7 +36,7 @@ and Swift/Kotlin round trips through the native library. Apple/Android device
 builds require their platform SDKs separately.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **10** requires matching native bindings and
+under ignored `dist/`. Shell protocol **11** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:

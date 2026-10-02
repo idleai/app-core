@@ -5,9 +5,10 @@
 provider record, draft, base revision, dirty/conflict flags, validation feedback,
 load state, save state, immutable pending save and available actions.
 
-Shell protocol **10** adds `Event::Configuration`, `Effect::Configuration`,
-`EffectFfi::Configuration` and `ConfigurationResponse`. Native clients must
-regenerate matching codecs. Rust hosts resolve the boxed typed request with
+Shell protocol **11** includes `Event::Configuration`, `Effect::Configuration`,
+`EffectFfi::Configuration` and `ConfigurationResponse`, with a reviewed revision
+on `Rebase` and a distinct `Refreshing` load state. Native clients must regenerate
+matching codecs. Rust hosts resolve the boxed typed request with
 `request.as_mut()`. The coordination envelope remains v1.
 
 ## Provider boundary
@@ -40,12 +41,18 @@ form feedback; `actions` lists the currently available intents. A dirty draft ca
 save only after a successful load, with supported format, provider edit capability,
 valid JSON and no conflict or unresolved save.
 
-`Refresh` and subscription invalidations reload both documents. Clean drafts track
-new values. Dirty drafts keep their original text and base revision. A newer
-record makes `conflict` visible and disables Save. After reviewing the current
-record alongside the draft, the user can `Rebase` to keep the draft against the
-new revision, or `Discard` to use the current saved content. Neither action emits
-a write. Rebase is an explicit overwrite decision, not an automatic field merge.
+`Refresh` and subscription invalidations reload both documents. Background reads
+show `Refreshing` and keep valid saves available against the last confirmed
+revision. Initial and recovery reads show `Loading` and block saves until they
+succeed. Clean drafts track new values. Dirty drafts keep their original text and
+base revision. A newer record makes `conflict` visible and disables Save. After
+reviewing the current record alongside the draft, the user can send
+`Rebase { document, reviewed_revision }` to keep the draft against that revision,
+or `Discard` to use the current saved content. The client must copy the revision
+from the record shown during review (`None` for confirmed absence). If another
+read has advanced the record, Rebase reports a conflict and preserves the draft
+and its base. Neither action emits a write. Rebase is an explicit overwrite
+decision, not an automatic field merge.
 
 The Settings and Agent Rules navigation destinations consume their respective
 editors; loading, edits and saves in one do not overwrite the other.
@@ -93,9 +100,12 @@ request's status and return its retained outcome through the same effect.
 
 Users can continue editing during a save. A successful acknowledgement advances
 the draft's base to the committed revision while preserving newer text. `Saved`
-reports the last committed revision independently of `dirty`. Pending reads are
-coalesced and delayed during writes. A retained save result cannot roll back a
-newer confirmed record or restore an older editing capability.
+reports the last committed revision independently of `dirty`. Refresh requests
+are coalesced and delayed during writes. A save or retry retires any background
+read already in flight and schedules a fresh read after its outcome; a late reply
+from the retired read cannot change either document's state. Accepted saves and
+retries clear previous client action errors. A retained save result cannot roll
+back a newer confirmed record or restore an older editing capability.
 
 ## Connection lifecycle
 

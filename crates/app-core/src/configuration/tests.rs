@@ -7,6 +7,7 @@ use super::{
 };
 use crate::{Core, Effect, Event as RootEvent, workspace::WorkspaceMode};
 
+mod concurrency_cases;
 mod recovery_cases;
 mod root_cases;
 mod state_cases;
@@ -97,6 +98,14 @@ fn edit(core: &Core, document: ConfigurationDocument, json: &str) {
             json: json.into(),
         },
     );
+}
+
+fn editor(core: &Core, document: ConfigurationDocument) -> super::ConfigurationEditorView {
+    let view = core.view().configuration;
+    match document {
+        ConfigurationDocument::Settings => view.settings,
+        ConfigurationDocument::AgentRules => view.agent_rules,
+    }
 }
 
 fn identity(id: &str) -> ConfigurationRequest {

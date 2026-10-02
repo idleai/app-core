@@ -13,6 +13,12 @@ use crate::Effect;
 
 type ConfigurationCommand = Command<Effect, ConfigurationEvent>;
 
+#[derive(Clone, Copy)]
+enum DraftResolution {
+    Discard,
+    Rebase(Option<u64>),
+}
+
 /// Client intents, with internal completions excluded from the shell input codec.
 #[derive(Clone, Debug, Deserialize, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -30,8 +36,13 @@ pub enum ConfigurationEvent {
     },
     /// Discard a draft in favor of the latest confirmed value, unless saving.
     Discard(ConfigurationDocument),
-    /// After reviewing a conflict, retain the draft against the latest revision.
-    Rebase(ConfigurationDocument),
+    /// Retain the draft against the exact revision reviewed in a conflict.
+    Rebase {
+        /// Settings or rules editor.
+        document: ConfigurationDocument,
+        /// Revision shown alongside the draft; None means confirmed absence.
+        reviewed_revision: Option<u64>,
+    },
     /// Submit a changed, valid draft with a new host-persisted identity.
     Save {
         /// Editor to save; the other editor remains independent.
@@ -97,37 +108,13 @@ impl App for Configuration {
                 model.action_error = None;
                 render::render()
             }
-            ConfigurationEvent::Discard(document) | ConfigurationEvent::Rebase(document) => {
-                let editor = model.editor_mut(document);
-                if editor.pending.is_some() || editor.load != ConfigurationLoadState::Ready {
-                    return action_error(
-                        model,
-                        validation::error(
-                            ConfigurationErrorKind::InvalidInput,
-                            "Wait for the current load or save outcome before resolving this draft",
-                        ),
-                    );
-                }
-                if matches!(event, ConfigurationEvent::Discard(_)) {
-                    editor.discard();
-                } else if editor.can_edit() {
-                    editor.base = editor
-                        .snapshot
-                        .as_ref()
-                        .and_then(|snapshot| snapshot.record.clone());
-                    editor.save = ConfigurationSaveState::Idle;
-                } else {
-                    return action_error(
-                        model,
-                        validation::error(
-                            ConfigurationErrorKind::Forbidden,
-                            "This configuration is read-only",
-                        ),
-                    );
-                }
-                model.action_error = None;
-                render::render()
+            ConfigurationEvent::Discard(document) => {
+                resolve_draft(model, document, DraftResolution::Discard)
             }
+            ConfigurationEvent::Rebase {
+                document,
+                reviewed_revision,
+            } => resolve_draft(model, document, DraftResolution::Rebase(reviewed_revision)),
             ConfigurationEvent::Save { document, request } => save(model, document, request),
             ConfigurationEvent::RetrySave(document) => {
                 if !model.editor(document).can_retry() {
@@ -136,8 +123,7 @@ impl App for Configuration {
                 let Some(save) = model.editor(document).pending.clone() else {
                     return Command::done();
                 };
-                model.editor_mut(document).save = ConfigurationSaveState::Saving;
-                dispatch(model, document, ConfigurationAction::Save(save))
+                submit_save(model, document, save)
             }
             ConfigurationEvent::Suspend => {
                 if model.context.is_none() {
@@ -173,6 +159,53 @@ fn action_error(model: &mut Model, error: ConfigurationError) -> ConfigurationCo
     render::render()
 }
 
+fn resolve_draft(
+    model: &mut Model,
+    document: ConfigurationDocument,
+    resolution: DraftResolution,
+) -> ConfigurationCommand {
+    let editor = model.editor_mut(document);
+    if editor.pending.is_some() || !editor.is_ready() {
+        return action_error(
+            model,
+            validation::error(
+                ConfigurationErrorKind::InvalidInput,
+                "Wait for the current load or save outcome before resolving this draft",
+            ),
+        );
+    }
+    if let DraftResolution::Rebase(reviewed_revision) = resolution {
+        if !editor.can_edit() {
+            return action_error(
+                model,
+                validation::error(
+                    ConfigurationErrorKind::Forbidden,
+                    "This configuration is read-only",
+                ),
+            );
+        }
+        let current = editor
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.record.as_ref());
+        if current.map(|record| record.revision) != reviewed_revision {
+            return action_error(
+                model,
+                validation::error(
+                    ConfigurationErrorKind::Conflict,
+                    "Configuration changed since review; review the current revision before rebasing",
+                ),
+            );
+        }
+        editor.base = current.cloned();
+        editor.save = ConfigurationSaveState::Idle;
+    } else {
+        editor.discard();
+    }
+    model.action_error = None;
+    render::render()
+}
+
 fn refresh(model: &mut Model) -> ConfigurationCommand {
     reload(model, ConfigurationDocument::Settings)
         .and(reload(model, ConfigurationDocument::AgentRules))
@@ -186,14 +219,20 @@ fn reload(model: &mut Model, document: ConfigurationDocument) -> ConfigurationCo
     if editor.load == ConfigurationLoadState::Suspended {
         return Command::done();
     }
-    if editor.load == ConfigurationLoadState::Loading
-        || editor.save == ConfigurationSaveState::Saving
+    if matches!(
+        editor.load,
+        ConfigurationLoadState::Loading | ConfigurationLoadState::Refreshing
+    ) || editor.save == ConfigurationSaveState::Saving
     {
         editor.refresh_again = true;
         return Command::done();
     }
     editor.refresh_again = false;
-    editor.load = ConfigurationLoadState::Loading;
+    editor.load = if editor.is_ready() {
+        ConfigurationLoadState::Refreshing
+    } else {
+        ConfigurationLoadState::Loading
+    };
     dispatch(model, document, ConfigurationAction::Load)
 }
 
@@ -255,6 +294,23 @@ fn save(
         expected_revision: editor.base.as_ref().map(|base| base.revision),
         value: editor.draft.clone(),
     };
+    submit_save(model, document, save)
+}
+
+fn submit_save(
+    model: &mut Model,
+    document: ConfigurationDocument,
+    save: ConfigurationSave,
+) -> ConfigurationCommand {
+    // A read started before this save cannot update state after its outcome.
+    model.requests.retain(|operation| {
+        operation.document != document || operation.action != ConfigurationAction::Load
+    });
+    let editor = model.editor_mut(document);
+    if editor.load == ConfigurationLoadState::Refreshing {
+        editor.load = ConfigurationLoadState::Ready;
+        editor.refresh_again = true;
+    }
     editor.pending = Some(save.clone());
     editor.save = ConfigurationSaveState::Saving;
     model.action_error = None;

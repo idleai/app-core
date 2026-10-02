@@ -27,7 +27,7 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `10`; includes history, workspace, subscription, session, projection, resource and configuration payloads. |
+| `protocol_version()` | Returns `11`; includes history, workspace, subscription, session, projection, resource and configuration payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
 | `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse`, `ResourceResponse` or `ConfigurationResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |

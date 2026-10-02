@@ -46,8 +46,15 @@ impl Editor {
         })
     }
 
+    pub(super) fn is_ready(&self) -> bool {
+        matches!(
+            self.load,
+            ConfigurationLoadState::Ready | ConfigurationLoadState::Refreshing
+        )
+    }
+
     pub(super) fn can_save(&self) -> bool {
-        self.load == ConfigurationLoadState::Ready
+        self.is_ready()
             && self.can_edit()
             && self.dirty()
             && !self.conflict()
@@ -56,7 +63,7 @@ impl Editor {
     }
 
     pub(super) fn can_retry(&self) -> bool {
-        self.load == ConfigurationLoadState::Ready
+        self.is_ready()
             && self.pending.is_some()
             && matches!(self.save, ConfigurationSaveState::Uncertain(_))
     }
@@ -107,7 +114,7 @@ impl Editor {
         if self.can_retry() {
             actions.push(ConfigurationEditorAction::RetrySave);
         }
-        if self.pending.is_none() && self.load == ConfigurationLoadState::Ready {
+        if self.pending.is_none() && self.is_ready() {
             actions.push(ConfigurationEditorAction::Discard);
             if self.conflict() && self.can_edit() {
                 actions.push(ConfigurationEditorAction::Rebase);

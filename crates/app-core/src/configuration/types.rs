@@ -96,7 +96,7 @@ pub enum ConfigurationLoadState {
     /// No selected context.
     #[default]
     Idle,
-    /// An authorized read is in flight.
+    /// An initial or recovery read is in flight; saving waits for its result.
     Loading,
     /// Current read completed, including an explicitly absent document.
     Ready,
@@ -104,6 +104,8 @@ pub enum ConfigurationLoadState {
     Suspended,
     /// Read failed; any previous draft is retained.
     Failed(ConfigurationError),
+    /// A background read is in flight; the confirmed value remains usable.
+    Refreshing,
 }
 
 /// Save feedback never treats dispatch or receipt as a successful commit.

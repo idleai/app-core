@@ -12,6 +12,7 @@ import ai.idle.appcore.types.ConfigurationEvent
 import ai.idle.appcore.types.ConfigurationRequest
 import ai.idle.appcore.types.ConfigurationSave
 import ai.idle.appcore.types.ConfigurationSaveState
+import ai.idle.appcore.types.ConfigurationLoadState
 import ai.idle.appcore.types.ConfigurationErrorKind
 import ai.idle.appcore.types.ConfigurationEditorAction
 import ai.idle.appcore.bindings.AppCore
@@ -169,7 +170,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 10u)
+    check(core.protocolVersion() == 11u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -444,10 +445,19 @@ private fun configurationSmoke(mode: WorkspaceMode) = AppCore().use { client ->
     val editor = view(client).configuration.settings
     check(editor.save == ConfigurationSaveState.Saved(ULong.MAX_VALUE) && editor.dirty && editor.pending == null)
     check(editor.draft.json == "{\"newer\":true}" && editor.baseRevision == ULong.MAX_VALUE)
+    send(client, Event.Configuration(ConfigurationEvent.Refresh))
+    check(view(client).configuration.settings.load == ConfigurationLoadState.Refreshing)
+    check(view(client).configuration.settings.actions.contains(ConfigurationEditorAction.SAVE))
+    send(client, Event.Configuration(ConfigurationEvent.Rebase(ConfigurationDocument.SETTINGS, ULong.MAX_VALUE - 1uL)))
+    check(view(client).configuration.actionError?.kind == ConfigurationErrorKind.CONFLICT)
+    check(view(client).configuration.settings.baseRevision == ULong.MAX_VALUE)
+    send(client, Event.Configuration(ConfigurationEvent.Rebase(ConfigurationDocument.SETTINGS, ULong.MAX_VALUE)))
+    check(view(client).configuration.actionError == null)
+    check(view(client).configuration.settings.draft.json == "{\"newer\":true}")
     send(client, Event.Configuration(ConfigurationEvent.Edit(ConfigurationDocument.AGENTRULES, "[]")))
     check(view(client).configuration.agentRules.validationError?.kind == ConfigurationErrorKind.INVALIDINPUT)
     check(!view(client).configuration.agentRules.actions.contains(ConfigurationEditorAction.SAVE))
     send(client, Event.Configuration(ConfigurationEvent.Discard(ConfigurationDocument.AGENTRULES)))
     check(!view(client).configuration.agentRules.dirty)
-    println("Kotlin configuration drafts + conditional saves + full revisions in $mode PASS")
+    println("Kotlin configuration drafts + conditional saves + reviewed revisions + background refresh in $mode PASS")
 }

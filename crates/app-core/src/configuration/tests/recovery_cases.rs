@@ -1,6 +1,6 @@
 use super::{
-    commit, context, edit, identity, ready, record, request, requests, resolve_load, save, send,
-    snapshot,
+    commit, context, edit, editor, identity, ready, record, request, requests, resolve_load, save,
+    send, snapshot,
 };
 use crate::{
     Core,
@@ -11,6 +11,89 @@ use crate::{
     },
     workspace::WorkspaceMode,
 };
+
+#[test]
+fn accepted_retry_clears_action_errors_and_retires_background_reads() {
+    for mode in [WorkspaceMode::Standalone, WorkspaceMode::Managed] {
+        for document in [Document::Settings, Document::AgentRules] {
+            let core = ready(mode);
+            edit(&core, document, r#"{"saved":true}"#);
+            let mut original = save(&core, document, "lost-reply");
+            let _effects = core
+                .resolve(
+                    &mut original,
+                    Err(ConfigurationError {
+                        kind: ConfigurationErrorKind::Unavailable,
+                        message: "reply lost after send".into(),
+                    }),
+                )
+                .expect("unknown outcome");
+            let mut background = request(send(&core, Event::Refresh), document);
+            let _effects = send(&core, Event::Refresh);
+            background = request(
+                resolve_load(&core, &mut background, Some(record(3, "{}"))),
+                document,
+            );
+            assert_eq!(
+                editor(&core, document).load,
+                ConfigurationLoadState::Refreshing,
+                "retry is offered during continuous activity"
+            );
+            assert!(
+                editor(&core, document).actions.contains(&Action::RetrySave),
+                "background refresh cannot starve recovery"
+            );
+            let _effects = send(&core, Event::Discard(document));
+            assert!(
+                core.view().configuration.action_error.is_some(),
+                "unresolved save cannot be discarded"
+            );
+            let mut retry = request(send(&core, Event::RetrySave(document)), document);
+            assert_eq!(
+                retry.operation, original.operation,
+                "recovery uses the unchanged original request"
+            );
+            assert!(
+                core.view().configuration.action_error.is_none(),
+                "accepted retry clears obsolete action feedback"
+            );
+            let before = editor(&core, document);
+            let effects = core
+                .resolve(
+                    &mut background,
+                    Err(ConfigurationError {
+                        kind: ConfigurationErrorKind::Forbidden,
+                        message: "old read refused".into(),
+                    }),
+                )
+                .expect("retired read failure");
+            assert!(
+                effects.is_empty(),
+                "retired failure cannot change current state"
+            );
+            assert_eq!(
+                editor(&core, document),
+                before,
+                "retired error cannot interrupt the retry"
+            );
+            let mut fresh = request(commit(&core, &mut retry, 4), document);
+            assert_eq!(
+                editor(&core, document).save,
+                ConfigurationSaveState::Saved(4),
+                "retry confirms committed revision"
+            );
+            assert!(
+                core.view().configuration.action_error.is_none(),
+                "successful retry has no stale action error"
+            );
+            let _effects = resolve_load(&core, &mut fresh, Some(record(4, r#"{"saved":true}"#)));
+            assert!(
+                !editor(&core, document).dirty,
+                "fresh read confirms the committed value"
+            );
+        }
+    }
+}
 
 #[test]
 fn interrupted_save_retains_identity_payload_and_new_edits_across_reconnect() {
