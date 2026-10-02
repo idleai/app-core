@@ -167,17 +167,7 @@ impl App for IdleApp {
                 }
                 let command =
                     command.and(update_subscription(subscriptions::Event::Disconnect, model));
-                let command = command.and(
-                    sessions::Sessions
-                        .update(sessions::Event::Disconnect, &mut model.sessions)
-                        .map_event(Event::Sessions),
-                );
-                let command = command.and(update_projection(projections::Event::Disconnect, model));
-                let command = command.and(update_resources(resources::Event::Disconnect, model));
-                let command = command.and(update_configuration(
-                    configuration::Event::Disconnect,
-                    model,
-                ));
+                let command = command.and(retire_domains(model, None));
                 model.history.bind(None);
                 let event = after
                     .0
@@ -221,65 +211,14 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
     let command = subscriptions::Subscriptions
         .update(event, &mut model.subscriptions)
         .map_event(Event::Subscriptions);
-    let after = model.subscriptions.context();
-    if before.as_ref() != after {
+    let after = model.subscriptions.context().cloned();
+    let command = if before == after {
+        command
+    } else {
         model
             .history
-            .bind(after.map(|context| context.chain.clone()));
-    }
-    let command = if before.as_ref() != after
-        && model
-            .projections
-            .context()
-            .is_some_and(|context| after != Some(context))
-    {
-        command.and(
-            projections::Projections
-                .update(projections::Event::Disconnect, &mut model.projections)
-                .map_event(Event::Projections),
-        )
-    } else {
-        command
-    };
-    let command = if after.is_some_and(|active| {
-        model.sessions.context().is_some_and(|context| {
-            context.workspace_id != active.workspace
-                || context.chain != active.chain
-                || context.contributor_id != active.contributor
-                || context.provider != active.provider
-        })
-    }) {
-        command.and(
-            sessions::Sessions
-                .update(sessions::Event::Disconnect, &mut model.sessions)
-                .map_event(Event::Sessions),
-        )
-    } else {
-        command
-    };
-    let command = if before.as_ref() != after
-        && model.resources.context().is_some_and(|context| {
-            !after.is_some_and(|active| resource_subscription_matches(context, active))
-        }) {
-        command.and(
-            resources::Resources
-                .update(resources::Event::Disconnect, &mut model.resources)
-                .map_event(Event::Resources),
-        )
-    } else {
-        command
-    };
-    let command = if before.as_ref() != after
-        && model.configuration.context().is_some_and(|context| {
-            !after.is_some_and(|active| configuration_subscription_matches(context, active))
-        }) {
-        command.and(
-            configuration::Configuration
-                .update(configuration::Event::Disconnect, &mut model.configuration)
-                .map_event(Event::Configuration),
-        )
-    } else {
-        command
+            .bind(after.as_ref().map(|context| context.chain.clone()));
+        command.and(retire_domains(model, after.as_ref()))
     };
     if let Some(event) = model.subscriptions.take_history_event() {
         let configuration_event = match &event {
@@ -361,6 +300,66 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
     } else {
         command
     }
+}
+
+// Context removal and replacement share the same retirement path. Matching
+// domains may already be connected before their shared subscription starts.
+fn retire_domains(
+    model: &mut Model,
+    active: Option<&subscriptions::Context>,
+) -> Command<Effect, Event> {
+    let mut command = Command::done();
+    if active.is_none()
+        || model
+            .projections
+            .context()
+            .is_some_and(|context| active != Some(context))
+    {
+        command = command.and(
+            projections::Projections
+                .update(projections::Event::Disconnect, &mut model.projections)
+                .map_event(Event::Projections),
+        );
+    }
+    if active.is_none()
+        || model.sessions.context().is_some_and(|context| {
+            !active.is_some_and(|active| {
+                context.workspace_id == active.workspace
+                    && context.chain == active.chain
+                    && context.contributor_id == active.contributor
+                    && context.provider == active.provider
+            })
+        })
+    {
+        command = command.and(
+            sessions::Sessions
+                .update(sessions::Event::Disconnect, &mut model.sessions)
+                .map_event(Event::Sessions),
+        );
+    }
+    if active.is_none()
+        || model.resources.context().is_some_and(|context| {
+            !active.is_some_and(|active| resource_subscription_matches(context, active))
+        })
+    {
+        command = command.and(
+            resources::Resources
+                .update(resources::Event::Disconnect, &mut model.resources)
+                .map_event(Event::Resources),
+        );
+    }
+    if active.is_none()
+        || model.configuration.context().is_some_and(|context| {
+            !active.is_some_and(|active| configuration_subscription_matches(context, active))
+        })
+    {
+        command = command.and(
+            configuration::Configuration
+                .update(configuration::Event::Disconnect, &mut model.configuration)
+                .map_event(Event::Configuration),
+        );
+    }
+    command
 }
 
 fn update_projection(event: projections::Event, model: &mut Model) -> Command<Effect, Event> {

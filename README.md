@@ -35,6 +35,20 @@ The full check runs Rust lint/tests, native and WASM builds, binding generation,
 and Swift/Kotlin round trips through the native library. Apple/Android device
 builds require their platform SDKs separately.
 
+Check public API changes against sibling `web` and `vscode-extension` checkouts:
+
+```sh
+bash scripts/check-consumers.sh
+```
+
+This checks each native workspace and browser WASM target with locked dependencies
+and runs the effect-dispatch tests. Every requested checkout is required. Pass
+`web` or `vscode-extension` to check one consumer. CI checks the published extension;
+the browser check currently runs locally until its repository is published.
+CI pins sibling source revisions in `.github/workflows/ci.yml`; update those refs
+together after checking the selected source combination locally. Referenced
+commits must be published in their repositories before remote CI can fetch them.
+
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
 under ignored `dist/`. Shell protocol **11** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.

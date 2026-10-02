@@ -94,6 +94,84 @@ fn snapshot(core: &Core, request: &mut Request<history::Query>) -> Work {
 }
 
 #[test]
+fn authorization_expiry_retires_every_bound_domain() {
+    use crate::{configuration, projections, resources, sessions, workspace::WorkspaceMode};
+
+    let core = Core::new();
+    let active = context("provider");
+    let mut join = connect(&core, &active.provider);
+    for event in [
+        RootEvent::Sessions(sessions::Event::Connect(sessions::SessionContext {
+            provider: active.provider.clone(),
+            workspace_id: active.workspace.clone(),
+            contributor_id: active.contributor.clone(),
+            chain: active.chain.clone(),
+            mode: WorkspaceMode::Managed,
+        })),
+        RootEvent::Resources(resources::Event::Connect(resources::ResourceContext {
+            provider: active.provider.clone(),
+            workspace_id: active.workspace.clone(),
+            contributor_id: active.contributor.clone(),
+            chain: active.chain.clone(),
+            mode: WorkspaceMode::Managed,
+        })),
+        RootEvent::Configuration(configuration::Event::Connect(
+            configuration::ConfigurationContext {
+                provider: active.provider.clone(),
+                workspace_id: active.workspace.clone(),
+                contributor_id: active.contributor.clone(),
+                chain: active.chain.clone(),
+                mode: WorkspaceMode::Managed,
+            },
+        )),
+        RootEvent::Projections(projections::Event::Connect(active)),
+    ] {
+        let _effects = core.process_event(event);
+    }
+    let before = core.view();
+    assert!(
+        before.sessions.context.is_some(),
+        "session scope is selected"
+    );
+    assert!(
+        before.resources.context.is_some(),
+        "resource scope is selected"
+    );
+    assert!(
+        before.configuration.context.is_some(),
+        "editor scope is selected"
+    );
+    assert!(
+        before.projections.context.is_some(),
+        "projection scope is selected"
+    );
+    let _effects = core
+        .resolve(
+            &mut join,
+            Err(super::SubscriptionError {
+                kind: super::SubscriptionErrorKind::Unauthorized,
+                message: "Access expired".into(),
+            }),
+        )
+        .expect("authorization failure");
+    let after = core.view();
+    assert!(after.history.chain.is_none(), "history scope is cleared");
+    assert!(after.sessions.context.is_none(), "session scope is cleared");
+    assert!(
+        after.resources.context.is_none(),
+        "resource scope is cleared"
+    );
+    assert!(
+        after.configuration.context.is_none(),
+        "editor scope is cleared"
+    );
+    assert!(
+        after.projections.context.is_none(),
+        "projection scope is cleared"
+    );
+}
+
+#[test]
 fn connection_waits_for_snapshot_and_changes_during_recovery_are_not_lost() {
     let core = Core::new();
     let mut join = connect(&core, "standalone");

@@ -41,8 +41,13 @@ continuity, including queue overflow or a changed visibility scope, returns
 empty success when nothing changed.
 
 `Transport` errors permit retry. `Unavailable` requires a working host/provider
-adapter. `Unauthorized` clears the scoped history and stops retrying. Providers
-still enforce access; the core's context and status do not grant permissions.
+adapter. `Unauthorized` clears history, sessions, projections, resources and both
+configuration editors, including local prompts and pending continuations, and
+stops retrying. Disconnecting an active subscription also retires these scopes.
+Late results cannot restore retired state or restart its requests. A temporary
+transport interruption preserves the session context and its independent recovery path.
+Providers still enforce access; the core's context and status do not grant
+permissions.
 
 Resource discovery also refreshes after a buffered join or `Changed` notification.
 Hosts must include resource health, membership/grant changes, controller ownership
