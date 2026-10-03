@@ -81,10 +81,14 @@ pub fn demo_snapshot(
 ) -> Result<SessionSnapshot, SessionError> {
     let json = match mode {
         WorkspaceMode::Standalone => {
-            include_str!("../../../idle-protocol/tests/fixtures/standalone_snapshot.json")
+            include_str!(
+                "../../../../../host-tools/crates/idle-protocol/tests/fixtures/standalone_snapshot.json"
+            )
         }
         WorkspaceMode::Managed => {
-            include_str!("../../../idle-protocol/tests/fixtures/managed_snapshot.json")
+            include_str!(
+                "../../../../../host-tools/crates/idle-protocol/tests/fixtures/managed_snapshot.json"
+            )
         }
     };
     let response: Response<QueryResult> = serde_json::from_str(json)
