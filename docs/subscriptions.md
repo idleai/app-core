@@ -86,10 +86,11 @@ they must still report lost continuity and authorize a new snapshot when require
 
 `idle-history::requests`, `reconciliation` and `connection` hold the portable
 request tracker, ephemeral revision validation, join lifetime, retry policy and
-peer-status model, re-exported by `app_core::subscriptions`.
+peer-status model, re-exported by `app_core::subscriptions`. These portable
+packages now live in host-tools; the client subscription reducer stays here.
 
 The Dioxus application consumes these modules through app-core. The
-`idle-peer-state` Node/WASM binding exposes the same join and connection models to
+host-tools `idle-peer-state` Node/WASM binding exposes the same join and connection models to
 the VS Code host's portable peer coordinator. The host executes timers, native
 workers and Dev Tunnels operations and formats progress; Rust owns join
 generations, retry backoff and peer phases.

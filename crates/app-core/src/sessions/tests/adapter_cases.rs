@@ -20,7 +20,7 @@ use crate::{
 
 fn protocol_snapshot() -> RecoverySnapshot {
     let response: Response<QueryResult> = serde_json::from_str(include_str!(
-        "../../../../idle-protocol/tests/fixtures/managed_snapshot.json"
+        "../../../../../../host-tools/crates/idle-protocol/tests/fixtures/managed_snapshot.json"
     ))
     .expect("f20 snapshot fixture");
     match response.result {
@@ -86,7 +86,7 @@ fn protocol_snapshot_requires_explicit_item_mapping_and_drops_compute_provider_g
 #[test]
 fn input_effect_preserves_the_exact_f20_request_and_direct_runtime_identity() {
     let expected: Request<Command> = serde_json::from_str(include_str!(
-        "../../../../idle-protocol/tests/fixtures/submit_input.json"
+        "../../../../../../host-tools/crates/idle-protocol/tests/fixtures/submit_input.json"
     ))
     .expect("f20 input fixture");
     let text = match &expected.body {
@@ -134,7 +134,7 @@ fn input_effect_preserves_the_exact_f20_request_and_direct_runtime_identity() {
 #[test]
 fn f20_runtime_fixture_preserves_large_order_and_correlated_identity() {
     let report: RuntimeReport = serde_json::from_str(include_str!(
-        "../../../../idle-protocol/tests/fixtures/runtime_completed.json"
+        "../../../../../../host-tools/crates/idle-protocol/tests/fixtures/runtime_completed.json"
     ))
     .expect("f20 runtime fixture");
     let context = snapshot(WorkspaceMode::Managed, "contributor-bob").context;

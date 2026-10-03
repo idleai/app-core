@@ -23,8 +23,8 @@ facet_generate = { version = "=0.19.0", optional = true, default-features = fals
 thiserror = "2"
 editchain-core = { path = "../../../editchain/crates/editchain-core" }
 serde_json = "1"
-idle-history = { path = "../idle-history" }
-idle-protocol = { path = "../idle-protocol" }
+idle-history = { path = "../../../host-tools/crates/idle-history" }
+idle-protocol = { path = "../../../host-tools/crates/idle-protocol" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 editchain-engine = { path = "../../../editchain/crates/editchain-engine" }

@@ -4,7 +4,7 @@
 for Evo, standalone adapters, Offstage and app-core. A version-1 snapshot names
 one workspace and one logical chain and supplies each destination exactly once:
 activity, task, error, triage and need-input. The schema is published separately
-as [projections-v1.json](../crates/idle-protocol/schemas/projections-v1.json).
+as [projections-v1.json](https://github.com/idleai/host-tools/blob/main/crates/idle-protocol/schemas/projections-v1.json).
 Call `validate()` before consuming a decoded snapshot. Both directions of the
 app-core adapter validate the complete input.
 

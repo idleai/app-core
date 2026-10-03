@@ -103,6 +103,6 @@ Operation-ID cursors and `refresh()` results are not durable subscription cursor
 The shared Dioxus graph and details components consume these contracts directly.
 VS Code owns native document-opening adapters and resolves full record references
 through its packaged history service. The old viewer, coordinate service and
-projection contracts have been removed. `idle-history` retains the shared
+projection contracts have been removed. `idle-history` in host-tools retains the shared
 selection, request tracking, peer state and recorded application types needed by
 the current hosts.

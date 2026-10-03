@@ -9,12 +9,10 @@ their owning hosts and services.
 | --- | --- |
 | [app-core](crates/app-core) | Shared events, reducers, effects and view models. |
 | [app-core-bindings](crates/app-core-bindings) | BoltFFI bindings for Swift and Kotlin hosts. |
-| [idle-protocol](crates/idle-protocol) | Versioned coordination contracts, independent of Crux. |
-| [idle-history](crates/idle-history) | Portable history, source contracts, display taxonomy and connection state. |
-| [idle-peer-state](crates/idle-peer-state) | Node/WASM bindings for portable peer connection state. |
 
-Check out `idleai/editchain` at `../editchain`. This workspace has no renderer
-or VS Code dependency. Graph geometry lives in web-ui; editor request payloads
+Check out `idleai/editchain` at `../editchain` and `idleai/host-tools` at
+`../host-tools`. Host-tools owns the independent `idle-protocol`, `idle-history`
+and `idle-peer-state` packages. This workspace has no renderer or VS Code dependency. Graph geometry lives in web-ui; editor request payloads
 live in vscode-extension. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
 WASM target. Run commands from the repository root:
 
@@ -64,7 +62,7 @@ Integration guides:
 - [Settings and agent rules](docs/configuration.md) — versioned documents, drafts, conflicts and save feedback.
 - [Projections](docs/projections.md) — shared inputs, activity/task/error/triage/need-input views and controller mapping.
 - [Subscriptions](docs/subscriptions.md) — joins, reconnects and snapshot reconciliation.
-- [Coordination protocol](crates/idle-protocol/README.md) — public contracts and JSON Schema.
+- [Coordination protocol](https://github.com/idleai/host-tools/tree/main/crates/idle-protocol) — public contracts and JSON Schema.
 
 Contributor rules are in [AGENTS.md](AGENTS.md); dependency policy and its documented
 exceptions are in [deny.toml](deny.toml).
