@@ -1,4 +1,4 @@
-//! Temporary Node/WASM adapter for the legacy peer consumer until f18.
+//! Node/WASM bindings for portable peer connection state.
 //! Shared join, retry and status policy remains in app-core's idle-history crate.
 
 use idle_history::connection::{

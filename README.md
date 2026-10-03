@@ -10,10 +10,8 @@ their owning hosts and services.
 | [app-core](crates/app-core) | Shared events, reducers, effects and view models. |
 | [app-core-bindings](crates/app-core-bindings) | BoltFFI bindings for Swift and Kotlin hosts. |
 | [idle-protocol](crates/idle-protocol) | Versioned coordination contracts, independent of Crux. |
-| [idle-history](crates/idle-history) | Portable history and connection state shared with the legacy EditChain viewer. |
-| [editchain-project](crates/editchain-project) | Semantic history projections, grouping and source identities. |
-| [editchain-protocol](crates/editchain-protocol) | Shared compatibility host/view contracts. |
-| [editchain-client-state](crates/editchain-client-state) | Small Node/WASM binding for the existing peer host. |
+| [idle-history](crates/idle-history) | Portable history, source contracts, display taxonomy and connection state. |
+| [idle-peer-state](crates/idle-peer-state) | Node/WASM bindings for portable peer connection state. |
 
 Check out `idleai/editchain` at `../editchain`. This workspace has no renderer
 or VS Code dependency. Graph geometry lives in web-ui; editor request payloads
