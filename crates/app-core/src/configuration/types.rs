@@ -8,6 +8,9 @@ use crate::workspace::WorkspaceMode;
 /// JSON object document format understood by the editor, separate from revisions.
 pub const DOCUMENT_VERSION: u32 = 1;
 
+/// Maximum UTF-8 size accepted by repository configuration authorities.
+pub const MAX_DOCUMENT_BYTES: usize = 256 * 1024;
+
 /// Exact coordination route and authenticated workspace audience.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
@@ -170,6 +173,26 @@ pub struct ConfigurationEditorView {
     pub actions: Vec<ConfigurationEditorAction>,
 }
 
+/// Host-retained editor state. Restoring this never grants editing permission,
+/// claims a committed revision or submits an unresolved write automatically.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet reflection adds no safety invariants"
+)]
+pub struct ConfigurationDraft {
+    /// Exact provider, workspace, contributor, chain and mode of the original editor.
+    pub context: ConfigurationContext,
+    /// Independent document scope.
+    pub document: ConfigurationDocument,
+    /// Original saved value against which the draft was edited.
+    pub base: Option<ConfigurationRecord>,
+    /// Current text, including invalid intermediate JSON.
+    pub value: ConfigurationValue,
+    /// Original immutable save when delivery or acknowledgement is uncertain.
+    pub pending: Option<ConfigurationSave>,
+}
+
 /// Shared settings and rules state consumed by every client surface.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
@@ -185,4 +208,6 @@ pub struct ConfigurationViewModel {
     pub agent_rules: ConfigurationEditorView,
     /// Invalid context or client action, independent of provider feedback.
     pub action_error: Option<ConfigurationError>,
+    /// Dirty editors and unresolved saves for host persistence, scoped independently.
+    pub drafts: Vec<ConfigurationDraft>,
 }

@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{Core, IdleApp, effects::EffectFfi};
 
 /// Version of the app-core shell protocol (independent of coordination APIs).
-pub const PROTOCOL_VERSION: u32 = 11;
+pub const PROTOCOL_VERSION: u32 = 12;
 
 /// Crux's fixed-width, little-endian bincode format, rejecting trailing input.
 #[derive(Debug)]

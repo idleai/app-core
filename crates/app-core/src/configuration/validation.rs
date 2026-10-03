@@ -35,6 +35,12 @@ pub(super) fn context(value: &ConfigurationContext) -> Result<(), ConfigurationE
 }
 
 pub(super) fn value(value: &ConfigurationValue) -> Result<(), ConfigurationError> {
+    if value.json.len() > super::MAX_DOCUMENT_BYTES {
+        return Err(error(
+            ConfigurationErrorKind::InvalidInput,
+            "Configuration exceeds the 256 KiB UTF-8 limit",
+        ));
+    }
     if value.schema_version != DOCUMENT_VERSION {
         return Err(error(
             ConfigurationErrorKind::Unsupported,

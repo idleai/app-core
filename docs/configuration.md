@@ -5,9 +5,9 @@
 provider record, draft, base revision, dirty/conflict flags, validation feedback,
 load state, save state, immutable pending save and available actions.
 
-Shell protocol **11** includes `Event::Configuration`, `Effect::Configuration`,
+Shell protocol **12** includes `Event::Configuration`, `Effect::Configuration`,
 `EffectFfi::Configuration` and `ConfigurationResponse`, with a reviewed revision
-on `Rebase` and a distinct `Refreshing` load state. Native clients must regenerate
+on `Rebase`, a distinct `Refreshing` load state and host-restorable drafts. Native clients must regenerate
 matching codecs. Rust hosts resolve the boxed typed request with
 `request.as_mut()`. The coordination envelope remains v1.
 
@@ -29,7 +29,7 @@ Version 1 documents contain a full JSON object in `ConfigurationValue::json`.
 `schema_version` is the document format version; `revision` is the independent,
 positive provider-assigned concurrency token. All fields, including unknown
 settings and rule fields, remain in the document. App-core checks JSON syntax and
-object shape only. Domain schemas, defaults and rule meanings stay with their
+object shape and the 256 KiB UTF-8 document limit. Domain schemas, defaults and rule meanings stay with their
 owners. Unsupported document formats remain visible and read-only; the client
 does not migrate or overwrite them. Revisions retain all 64 bits in native codecs.
 
@@ -77,8 +77,8 @@ the complete value, assign a revision and retain the request result. Replaying
 the same identity, deadline and payload returns its original outcome. Reusing an
 identity for another payload must fail. Expired or unrecognized requests must
 fail closed. Managed configuration and its durable change distribution belong to
-Offstage (f55); standalone persistence/coordination belongs to Evo's standalone
-adapter (f18). Evo remains responsible for interpreting and enforcing agent rules
+Offstage (f55); standalone persistence/coordination belongs to the host-tools repository
+service (f18). Evo remains responsible for interpreting and enforcing agent rules
 at execution boundaries (f15).
 
 Return one of these results through the matching continuation:
@@ -126,3 +126,21 @@ subscription and workspace bindings, and shell response validation. Swift/Kotlin
 smoke tests exercise generated configuration codecs through the native library.
 Live provider persistence, event distribution and Evo enforcement remain with
 their owning features and the complete-product integration suites.
+
+## Retained drafts
+
+`ViewModel::configuration.drafts` contains each dirty or unresolved document with
+its exact context, complete text, original base record and immutable pending
+save. Store this state separately for each editor surface, repository connection
+and contributor. Intermediate invalid JSON can be retained up to 1 MiB; valid
+saves still use the 256 KiB authority limit. JavaScript hosts must keep serialized
+Rust state opaque so 64-bit revisions are never rounded.
+
+After loading the current authorized documents, `Restore(ConfigurationDraft)`
+restores the old base and any uncertain save without executing a write. A changed
+provider revision becomes a visible conflict. Restoration cannot replace newer
+local edits, cross a context boundary or reuse an active request identity. The
+host must durably retain the pending draft and exact outgoing command before
+forwarding a save. Reopening then offers recovery of the original request,
+including its original deadline; it never allocates a replacement request for an
+unknown outcome.

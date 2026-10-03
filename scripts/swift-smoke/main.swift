@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 11)
+check(core.protocolVersion() == 12)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }

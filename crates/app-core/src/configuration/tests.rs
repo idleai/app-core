@@ -9,6 +9,7 @@ use crate::{Core, Effect, Event as RootEvent, workspace::WorkspaceMode};
 
 mod concurrency_cases;
 mod recovery_cases;
+mod restore_cases;
 mod root_cases;
 mod state_cases;
 mod wire_cases;
