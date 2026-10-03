@@ -88,15 +88,13 @@ they must still report lost continuity and authorize a new snapshot when require
 request tracker, ephemeral revision validation, join lifetime, retry policy and
 peer-status model, re-exported by `app_core::subscriptions`.
 
-The old EditChain renderer delegates request ownership and both live revision
-paths to these modules. Its conditional row validation, coordinates, anchor
-placement and DOM plans remain renderer work for f30/f31. Its WASM adapter also
-exports the shared join/connection models to the old Node extension. The extension
-executes timers, native workers and Dev Tunnels operations and formats progress;
-it no longer computes the join generation, retry backoff or peer phase itself.
+The Dioxus application consumes these modules through app-core. The
+`idle-peer-state` Node/WASM binding exposes the same join and connection models to
+the VS Code host's portable peer coordinator. The host executes timers, native
+workers and Dev Tunnels operations and formats progress; Rust owns join
+generations, retry backoff and peer phases.
 
-The legacy extension's approved-peer records, credentials, sharing scope and
-transport cleanup remain with f18/f38. f43's new extension assembly consumes Crux
-effects directly; it can retire the temporary Node bindings with the old host.
-Browser and new extension scaffolds return an explicit unavailable result until
-their production subscription adapters are installed by f60/f43.
+VS Code owns approved peers, credentials, sharing scope and transport cleanup.
+Folder-owned collection sends history invalidations through the bound app-core
+adapter, including writes from editor capture and peer replication. Production
+session and managed subscription providers remain f43/f60 integration work.

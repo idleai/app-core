@@ -100,9 +100,9 @@ inserts, conflict retractions and late blobs are reconciled without appending
 duplicate state. The host must buffer invalidations throughout the read.
 Operation-ID cursors and `refresh()` results are not durable subscription cursors.
 
-The legacy viewer keeps coordinate/viewport adapters until f30/f31 migrate its
-graph/details consumers. Its semantic selection and preview contracts already
-delegate to `idle-history`, as do its request tracker and revision checks.
-Native document-opening adapters move with f40. The compatibility `legacy`
-preview functions are deliberately lossy and are never used by the new reducer's
-record/content lookup path.
+The shared Dioxus graph and details components consume these contracts directly.
+VS Code owns native document-opening adapters and resolves full record references
+through its packaged history service. The old viewer, coordinate service and
+projection contracts have been removed. `idle-history` retains the shared
+selection, request tracking, peer state and recorded application types needed by
+the current hosts.

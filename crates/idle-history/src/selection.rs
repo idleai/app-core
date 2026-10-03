@@ -1,4 +1,4 @@
-//! Stable semantic selection shared with the legacy renderer.
+//! Stable semantic selection for shared history views.
 
 /// Stable semantic selection extracted from the old history renderer.
 /// Roving focus, row locations and scrolling remain with the renderer.

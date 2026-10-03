@@ -1,5 +1,5 @@
 [package]
-name = "editchain-client-state"
+name = "idle-peer-state"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"

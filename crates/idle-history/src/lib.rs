@@ -1,9 +1,8 @@
-//! Portable semantic contracts shared by app-core and transitional viewer clients.
-//! Crux owns history state in app-core; this small package keeps the old protocol
-//! and renderer independent of the Crux runtime during their staged migration.
+//! Portable history presentation, peer state and recorded application contracts.
+//! Crux owns application state; import adapters and native hosts reuse these
+//! types without depending on the UI runtime.
 
 pub mod connection;
-pub mod legacy;
 mod presentation;
 pub mod reconciliation;
 pub mod requests;
@@ -11,3 +10,10 @@ mod selection;
 
 pub use presentation::{ContentText, MAX_ROW_TEXT_BYTES, MAX_TOOL_LABEL_BYTES, RowContent};
 pub use selection::Selection;
+
+/// Recorded editor identity and work contracts.
+pub mod human;
+/// Versioned source-provider identity and derivation contracts.
+pub mod provider;
+/// Application classifications used by history presentation.
+pub mod taxonomy;
