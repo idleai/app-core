@@ -71,13 +71,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/web-ui
-          ref: a06a207fc6fc3a7f8657ff449957c3db04857258
+          ref: fc73c121538e92f8d5a44957dc4aff827c628821
           path: web-ui
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: idleai/vscode-extension
-          ref: c717f35758ea16126f87b4fdb7ca8813587e8986
+          ref: 092cdfe9c9d98de9733865236aeae3f8707a398d
           path: vscode-extension
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
