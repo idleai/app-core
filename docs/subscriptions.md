@@ -89,11 +89,10 @@ request tracker, ephemeral revision validation, join lifetime, retry policy and
 peer-status model, re-exported by `app_core::subscriptions`. These portable
 packages now live in host-tools; the client subscription reducer stays here.
 
-The Dioxus application consumes these modules through app-core. The
-host-tools `idle-peer-state` Node/WASM binding exposes the same join and connection models to
-the VS Code host's portable peer coordinator. The host executes timers, native
-workers and Dev Tunnels operations and formats progress; Rust owns join
-generations, retry backoff and peer phases.
+The Dioxus application consumes these modules through app-core. Native
+`idle-coordination` uses the same join and connection models directly. The
+VS Code host supplies commands and credentials through the service pipe; Rust
+owns join generations, retry backoff, peer phases and Dev Tunnels operations.
 
 VS Code owns approved peers, credentials, sharing scope and transport cleanup.
 Folder-owned collection sends history invalidations through the bound app-core
