@@ -11,6 +11,8 @@ use crux_core as _;
 use facet as _;
 #[cfg(feature = "typegen")]
 use facet_generate as _;
+#[cfg(not(target_arch = "wasm32"))]
+use idle_history_native as _;
 use serde as _;
 use thiserror as _;
 

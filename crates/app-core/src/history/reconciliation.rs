@@ -1,79 +1,12 @@
 //! Atomic replacement of loaded query windows after reconnect or invalidation.
 
-use serde::{Deserialize, Serialize};
-
 use super::{
-    Filter, HistoryPage, Model, OperationDetails, Page, Paging, QueryAction, QueryResult,
-    RequestState, SearchPage, SearchView, cache, reducer,
+    HistoryPage, Model, Page, Paging, QueryAction, QueryResult, RequestState, SearchPage,
+    SearchView, cache, reducer,
 };
 use crate::module::EffectError;
 
-/// A logical item's loaded candidate window, rescanned from the beginning.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
-#[expect(
-    clippy::unsafe_derive_deserialize,
-    reason = "Facet reflection adds no safety invariants"
-)]
-pub struct ItemScan {
-    /// Full logical item identity.
-    pub item: String,
-    /// Number of bounded pages to replace, stopping early at the end of history.
-    pub pages: u32,
-}
-
-/// One reconciliation read, evaluated against one refreshed engine index.
-/// Page positions are transient scans, never reconnect checkpoints.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
-#[expect(
-    clippy::unsafe_derive_deserialize,
-    reason = "Facet reflection adds no safety invariants"
-)]
-pub struct Reconcile {
-    /// Current history/search filter.
-    pub filter: Filter,
-    /// Current literal search, if any.
-    pub text: String,
-    /// Loaded history depth in bounded pages.
-    pub history_pages: u32,
-    /// Loaded search depth in bounded pages; zero when search is closed.
-    pub search_pages: u32,
-    /// Selected and expanded logical items, including their loaded depth.
-    pub items: Vec<ItemScan>,
-    /// Cached operation identities whose removal or quarantine must be checked.
-    pub known: Vec<String>,
-    /// Operations with open/cached details, whose late content must be re-read.
-    pub details: Vec<String>,
-}
-
-/// Replacement candidate pages for one requested logical item.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
-#[expect(
-    clippy::unsafe_derive_deserialize,
-    reason = "Facet reflection adds no safety invariants"
-)]
-pub struct ItemSnapshot {
-    /// Requested item identity.
-    pub item: String,
-    /// Ordered candidate pages from the same refreshed index.
-    pub pages: Vec<HistoryPage>,
-}
-
-/// Materialized replacement returned by one host read. No durable cursor is implied.
-#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
-#[expect(
-    clippy::unsafe_derive_deserialize,
-    reason = "Facet reflection adds no safety invariants"
-)]
-pub struct Reconciled {
-    /// Replacement loaded history window, beginning at the start of the chain.
-    pub history: Vec<HistoryPage>,
-    /// Replacement search matches and content gaps.
-    pub search: Vec<SearchPage>,
-    /// Replacement windows for the requested logical items.
-    pub items: Vec<ItemSnapshot>,
-    /// Every requested detail plus any missing/quarantined known operation.
-    pub details: Vec<OperationDetails>,
-}
+pub use idle_history::query::{ItemScan, ItemSnapshot, Reconcile, Reconciled};
 
 fn pages(paging: &Paging) -> u32 {
     u32::try_from(paging.scanned.div_ceil(u64::from(Page::default().limit)))

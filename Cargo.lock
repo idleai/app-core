@@ -34,6 +34,7 @@ dependencies = [
  "facet",
  "facet_generate",
  "idle-history",
+ "idle-history-native",
  "idle-protocol",
  "serde",
  "serde_json",
@@ -869,7 +870,20 @@ version = "0.1.0"
 dependencies = [
  "editchain-core",
  "facet",
+ "idle-protocol",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "idle-history-native"
+version = "0.1.0"
+dependencies = [
+ "editchain-core",
+ "editchain-engine",
+ "idle-history",
+ "idle-protocol",
+ "serde_json",
 ]
 
 [[package]]

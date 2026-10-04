@@ -5,23 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::ConnectionStatus;
 
-/// Full authorization and history context. Returning to the same context starts
-/// a new request lifetime; these strings never substitute for provider grants.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
-#[expect(
-    clippy::unsafe_derive_deserialize,
-    reason = "Facet reflection adds no safety invariants"
-)]
-pub struct Context {
-    /// Configured standalone or managed provider identity.
-    pub provider: String,
-    /// Logical workspace, preserved across provider adoption.
-    pub workspace: String,
-    /// Authenticated audience; never a host/device label.
-    pub contributor: String,
-    /// Explicit logical chain binding resolved by the host.
-    pub chain: String,
-}
+pub use idle_history::binding::Context;
 
 /// Host work for one explicit subscription context.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]

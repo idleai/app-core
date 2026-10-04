@@ -145,3 +145,17 @@ revisions, members, presence expiry, navigation and typed failures.
 
 Run `./scripts/lint.sh` and `./scripts/check.sh`. Regenerate host payload bindings
 for shell protocol 5; coordination JSON protocol v1 is unchanged.
+
+## Peer-awareness views
+
+`app_core::presence` derives file peers and join choices from accepted workspace
+and directory state. `PeerAwareness` tracks branch transitions, pending invitations
+and acknowledgements across refreshes. Reset it when the selected account,
+provider or recovery stream changes. `prepare_join` rechecks the selected intent
+against current state; its result still requires authorization at the responsible
+authority/runtime before connecting.
+
+Hosts supply editor context and render the resulting view. The VS Code host
+owns CodeLens, status items, prompts and command execution. Shared fixture JSON
+lives under `crates/app-core/tests/fixtures` and is also consumed by the extension
+host tests.

@@ -12,8 +12,13 @@ their owning hosts and services.
 
 Check out `idleai/editchain` at `../editchain` and `idleai/host-tools` at
 `../host-tools`. Host-tools owns the independent `idle-protocol`, `idle-history`
-and `idle-peer-state` packages. This workspace has no renderer or VS Code dependency. Graph geometry lives in web-ui; editor request payloads
-live in vscode-extension. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
+and native history service packages. Portable query/result types come from
+`idle-history`; native effect adapters delegate reads to `idle-history-native`
+with its service feature disabled. This workspace owns peer-awareness views,
+branch invitation state and join preparation in `presence`. Actual authorization
+remains with coordination/runtime services. This workspace has no renderer or
+VS Code dependency. Graph geometry lives in web-ui; platform actions remain in
+the client host. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
 WASM target. Run commands from the repository root:
 
 ```sh

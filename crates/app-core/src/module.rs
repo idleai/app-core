@@ -46,3 +46,19 @@ pub enum LoadState<T> {
     /// The host reported a failure; the domain can offer a retry.
     Failed(EffectError),
 }
+
+impl From<idle_history::query::Error> for EffectError {
+    fn from(value: idle_history::query::Error) -> Self {
+        Self {
+            message: value.message,
+        }
+    }
+}
+
+impl From<EffectError> for idle_history::query::Error {
+    fn from(value: EffectError) -> Self {
+        Self {
+            message: value.message,
+        }
+    }
+}
