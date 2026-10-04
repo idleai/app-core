@@ -240,6 +240,7 @@ impl ProjectionMapper for FixtureMapper {
                     key: payload.key,
                     title: payload.title,
                     summary: None,
+                    url: None,
                     status: Some(payload.status),
                     labels: vec!["fixture".into()],
                     sources: vec![source_reference(&record.entry)],

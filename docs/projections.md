@@ -109,3 +109,10 @@ subscription changes, missing/late content, bounded reads, duplicate delivery,
 lower-ID inserts, conflict retractions and index rebuilds. Swift and Kotlin smoke
 checks exercise the generated projection codecs. Live f11/f13 mapping and f54
 managed service integration remain with those feature owners.
+
+Standalone repository hosts can supply GitHub-derived inputs through
+`idle-repository`. Optional row source URLs are separate from exact history
+references and must pass HTTPS validation. The native host rechecks stored source
+hashes before admitting rows. The four GitHub views and their read bounds are
+documented in [repository integration](repository.md); Activity remains an engine
+read even if that adapter is unavailable.

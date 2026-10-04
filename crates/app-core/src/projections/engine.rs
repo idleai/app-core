@@ -303,6 +303,7 @@ fn activity(queries: &ChainQueries, read: &ProjectionRead) -> Result<ProjectionI
                     |activity| format!("{:?}", activity.kind.name()),
                 ),
                 summary: None,
+                url: None,
                 status: None,
                 labels: Vec::new(),
                 sources: vec![source_reference(&record.entry)],

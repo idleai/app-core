@@ -12,6 +12,7 @@ pub mod effects;
 pub mod history;
 pub mod module;
 pub mod projections;
+pub mod repository;
 pub mod resources;
 pub mod sessions;
 pub mod shell;

@@ -49,7 +49,7 @@ together after checking the selected source combination locally. Referenced
 commits must be published in their repositories before remote CI can fetch them.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **12** requires matching native bindings and
+under ignored `dist/`. Shell protocol **13** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:
@@ -66,3 +66,6 @@ Integration guides:
 
 Contributor rules are in [AGENTS.md](AGENTS.md); dependency policy and its documented
 exceptions are in [deny.toml](deny.toml).
+
+See [repository integration](docs/repository.md) for Git/GitHub reads, recorded
+session selection and the shell protocol 13 boundary.

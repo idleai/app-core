@@ -4,9 +4,9 @@ use std::{error::Error, io, path::PathBuf};
 
 use app_core::{
     Event, ViewModel, configuration::ConfigurationResponse, effects::HostInfoResponse,
-    history::QueryResponse, projections::ProjectionResponse, resources::ResourceResponse,
-    sessions::SessionResponse, shell::EffectBatch, subscriptions::SubscriptionResponse,
-    workspace::WorkspaceResponse,
+    history::QueryResponse, projections::ProjectionResponse, repository::RepositoryResponse,
+    resources::ResourceResponse, sessions::SessionResponse, shell::EffectBatch,
+    subscriptions::SubscriptionResponse, workspace::WorkspaceResponse,
 };
 use bincode as _;
 use crux_core as _;
@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .add_type::<ProjectionResponse>()?
         .add_type::<ResourceResponse>()?
         .add_type::<ConfigurationResponse>()?
+        .add_type::<RepositoryResponse>()?
         .add_type::<ViewModel>()?
         .build()?;
     swift::Installer::new("AppTypes", output.join("swift/AppTypes"))

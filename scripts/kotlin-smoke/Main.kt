@@ -170,7 +170,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 12u)
+    check(core.protocolVersion() == 13u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -181,7 +181,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     val effects = send(core, Event.Start)
     val id = effects.request(EffectFfi.HostInfo)
     val renderId = effects.first { it.effect == EffectFfi.Render }.id
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Loading, history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration, repository = idle.repository))
     check(send(core, Event.Start).isEmpty())
     val info = HostInfo(name = "Kotlin/JVM host 🌍", version = "1.0")
     val success = HostInfoResponse.Ok(info).bincodeSerialize()
@@ -191,7 +191,7 @@ private fun exercise(core: AppCore, other: AppCore) {
     rejected { core.handleResponse(id, byteArrayOf(0)) }
     rejected { core.handleResponse(id, success + byteArrayOf(0)) }
     check(respond(core, id, success).map { it.effect } == listOf(EffectFfi.Render))
-    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration))
+    check(view(core) == ViewModel(initialized = true, bootstrap = LoadState.Ready(info), history = idle.history, workspace = idle.workspace, subscriptions = idle.subscriptions, sessions = idle.sessions, projections = idle.projections, resources = idle.resources, configuration = idle.configuration, repository = idle.repository))
     rejected { core.handleResponse(id, success) }
     check(view(other) == idle)
 

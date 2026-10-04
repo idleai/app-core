@@ -4,8 +4,8 @@ use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    bootstrap, configuration, effects::Effect, history, projections, resources, sessions,
-    subscriptions, workspace,
+    bootstrap, configuration, effects::Effect, history, projections, repository, resources,
+    sessions, subscriptions, workspace,
 };
 
 /// State owned by one client, partitioned by domain reducer.
@@ -20,6 +20,7 @@ pub struct Model {
     projections: projections::Model,
     resources: resources::Model,
     configuration: configuration::Model,
+    repository: repository::Model,
 }
 
 /// Client actions and domain events accepted by the application.
@@ -44,6 +45,8 @@ pub enum Event {
     Resources(resources::Event),
     /// Route versioned settings and agent-rule editors.
     Configuration(configuration::Event),
+    /// Route repository reads and recorded-session history selection.
+    Repository(repository::Event),
 }
 
 /// The typed presentation state shared by all client surfaces.
@@ -71,6 +74,8 @@ pub struct ViewModel {
     pub resources: resources::ViewModel,
     /// Versioned settings and rules, pending drafts and provider save feedback.
     pub configuration: configuration::ConfigurationViewModel,
+    /// Git/GitHub data and recorded-session selection, without live runtime claims.
+    pub repository: repository::ViewModel,
 }
 
 /// Root reducer composing the shared application's domain modules.
@@ -126,6 +131,7 @@ impl App for IdleApp {
             Event::Projections(event) => return update_projection(event, model),
             Event::Resources(event) => return update_resources(event, model),
             Event::Configuration(event) => return update_configuration(event, model),
+            Event::Repository(event) => return update_repository(event, model),
             Event::Sessions(event) => {
                 if let sessions::Event::Connect(context) = &event
                     && ((model.workspace.owns_history()
@@ -147,6 +153,11 @@ impl App for IdleApp {
                     .map_event(Event::Sessions);
             }
             Event::Workspace(event) => {
+                let navigation = if let workspace::Event::Navigate(section) = &event {
+                    Some(*section)
+                } else {
+                    None
+                };
                 let before = (
                     model.workspace.chain().map(str::to_owned),
                     model.workspace.owns_history(),
@@ -163,7 +174,7 @@ impl App for IdleApp {
                     model.workspace.coordination_mode(),
                 );
                 if before == after {
-                    return command;
+                    return command.and(navigate_repository(navigation, model));
                 }
                 let command =
                     command.and(update_subscription(subscriptions::Event::Disconnect, model));
@@ -195,6 +206,7 @@ impl App for IdleApp {
             projections: projections::Projections.view(&model.projections),
             resources: resources::Resources.view(&model.resources),
             configuration: configuration::Configuration.view(&model.configuration),
+            repository: repository::Repositories.view(&model.repository),
         }
     }
 }
@@ -221,6 +233,30 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
         command.and(retire_domains(model, after.as_ref()))
     };
     if let Some(event) = model.subscriptions.take_history_event() {
+        let repository_event = match &event {
+            history::Event::Refresh => Some(repository::Event::Changed),
+            history::Event::Reconnect => Some(repository::Event::Reconnect),
+            history::Event::Suspend => Some(repository::Event::Suspend),
+            history::Event::Disconnect => Some(repository::Event::Disconnect),
+            history::Event::Connect(_)
+            | history::Event::SetFilter(_)
+            | history::Event::LoadMore
+            | history::Event::Search(_)
+            | history::Event::SearchMore
+            | history::Event::NavigateMatch(_)
+            | history::Event::Select(_)
+            | history::Event::ClearSelection
+            | history::Event::ToggleDisclosure(_)
+            | history::Event::LoadItem(_)
+            | history::Event::LoadOperationDetails { .. }
+            | history::Event::Open { .. }
+            | history::Event::Completed { .. } => None,
+        };
+        let command = if let Some(event) = repository_event {
+            command.and(update_repository(event, model))
+        } else {
+            command
+        };
         let configuration_event = match &event {
             history::Event::Refresh => Some(configuration::Event::Refresh),
             history::Event::Reconnect => Some(configuration::Event::Reconnect),
@@ -311,6 +347,18 @@ fn retire_domains(
     let mut command = Command::done();
     if active.is_none()
         || model
+            .repository
+            .context()
+            .is_some_and(|context| active != Some(&context.connection))
+    {
+        command = command.and(
+            repository::Repositories
+                .update(repository::Event::Disconnect, &mut model.repository)
+                .map_event(Event::Repository),
+        );
+    }
+    if active.is_none()
+        || model
             .projections
             .context()
             .is_some_and(|context| active != Some(context))
@@ -395,9 +443,25 @@ fn update_projection(event: projections::Event, model: &mut Model) -> Command<Ef
         return command;
     };
     let command = command.and(
+        workspace::Workspace
+            .update(
+                workspace::Event::Navigate(workspace::NavigationSection::Activity),
+                &mut model.workspace,
+            )
+            .map_event(Event::Workspace),
+    );
+    let command = command.and(
         history::History
             .update(
                 history::Event::Connect(context.chain.clone()),
+                &mut model.history,
+            )
+            .map_event(Event::History),
+    );
+    let command = command.and(
+        history::History
+            .update(
+                history::Event::SetFilter(history::Filter::default()),
                 &mut model.history,
             )
             .map_event(Event::History),
@@ -485,4 +549,93 @@ fn update_configuration(event: configuration::Event, model: &mut Model) -> Comma
     configuration::Configuration
         .update(event, &mut model.configuration)
         .map_event(Event::Configuration)
+}
+
+fn update_repository(event: repository::Event, model: &mut Model) -> Command<Effect, Event> {
+    if let repository::Event::Connect(context) = &event {
+        let binding = &context.connection;
+        if (model.workspace.owns_history()
+            && (model.workspace.chain() != Some(binding.chain.as_str())
+                || model.workspace.workspace_id() != Some(binding.workspace.as_str())))
+            || model
+                .subscriptions
+                .context()
+                .is_some_and(|active| active != binding)
+            || workspace::Workspace
+                .view(&model.workspace)
+                .repository_binding
+                .as_ref()
+                .is_some_and(|selected| selected.repository_id != context.repository_id)
+        {
+            return Command::done();
+        }
+    }
+    if model.subscriptions.context().is_some() && !model.subscriptions.has_connection() {
+        if let repository::Event::Connect(context) = &event {
+            model.repository.wait_for_connection(context.clone());
+            return render::render();
+        }
+        if matches!(event, repository::Event::Reconnect) {
+            return repository::Repositories
+                .update(repository::Event::Suspend, &mut model.repository)
+                .map_event(Event::Repository);
+        }
+    }
+    let mut command = repository::Repositories
+        .update(event, &mut model.repository)
+        .map_event(Event::Repository);
+    let events = model.repository.take_history_events();
+    if !events.is_empty()
+        && let Some(context) = model.repository.context()
+    {
+        command = command.and(
+            history::History
+                .update(
+                    history::Event::Connect(context.connection.chain.clone()),
+                    &mut model.history,
+                )
+                .map_event(Event::History),
+        );
+    }
+    for event in events {
+        command = command.and(
+            history::History
+                .update(event, &mut model.history)
+                .map_event(Event::History),
+        );
+    }
+    command
+}
+
+fn navigate_repository(
+    section: Option<workspace::NavigationSection>,
+    model: &mut Model,
+) -> Command<Effect, Event> {
+    match section {
+        Some(workspace::NavigationSection::Sessions) => {
+            let selected = model.repository.selected_session().map(str::to_owned);
+            if selected.is_some() {
+                return update_repository(repository::Event::SelectSession(selected), model);
+            }
+        }
+        Some(workspace::NavigationSection::Activity) => {
+            return history::History
+                .update(
+                    history::Event::SetFilter(history::Filter::default()),
+                    &mut model.history,
+                )
+                .map_event(Event::History);
+        }
+        None
+        | Some(
+            workspace::NavigationSection::Workspace
+            | workspace::NavigationSection::Members
+            | workspace::NavigationSection::Projections
+            | workspace::NavigationSection::ComputeHosts
+            | workspace::NavigationSection::ModelProviders
+            | workspace::NavigationSection::Settings
+            | workspace::NavigationSection::AgentRules,
+        ) => {}
+    }
+    Command::done()
 }

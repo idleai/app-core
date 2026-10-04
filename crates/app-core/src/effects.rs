@@ -12,6 +12,7 @@ use crate::configuration::{ConfigurationOperation, ConfigurationOutput};
 use crate::history::{Query, QueryOutput};
 use crate::module::EffectError;
 use crate::projections::{ProjectionOutput, ProjectionQuery};
+use crate::repository::{RepositoryOutput, RepositoryQuery};
 use crate::resources::{ResourceOperation, ResourceOutput};
 use crate::sessions::{SessionOperation, SessionOutput};
 use crate::subscriptions::{SubscriptionOperation, SubscriptionOutput};
@@ -83,6 +84,8 @@ pub enum Effect {
     Resource(Box<Request<ResourceOperation>>),
     /// Load or conditionally save settings/rules through either provider.
     Configuration(Box<Request<ConfigurationOperation>>),
+    /// Read Git/GitHub details and recorded sessions for the selected repository.
+    Repository(Box<Request<RepositoryQuery>>),
 }
 
 impl crux_core::Effect for Effect {}
@@ -141,6 +144,12 @@ impl From<Request<ConfigurationOperation>> for Effect {
     }
 }
 
+impl From<Request<RepositoryQuery>> for Effect {
+    fn from(request: Request<RepositoryQuery>) -> Self {
+        Self::Repository(Box::new(request))
+    }
+}
+
 /// Serializable operations, without Rust continuation handles.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
@@ -163,6 +172,8 @@ pub enum EffectFfi {
     Resource(Box<ResourceOperation>),
     /// Return a configuration response for this request ID.
     Configuration(Box<ConfigurationOperation>),
+    /// Return repository details and recorded-session source records.
+    Repository(Box<RepositoryQuery>),
 }
 
 impl EffectFfi {
@@ -176,7 +187,8 @@ impl EffectFfi {
             | Self::Session(_)
             | Self::Projection(_)
             | Self::Resource(_)
-            | Self::Configuration(_) => true,
+            | Self::Configuration(_)
+            | Self::Repository(_) => true,
         }
     }
 
@@ -215,6 +227,10 @@ impl EffectFfi {
                 let _result: ProjectionOutput = crate::shell::ShellFormat::deserialize(bytes)?;
                 Ok(())
             }
+            Self::Repository(_) => {
+                let _result: RepositoryOutput = crate::shell::ShellFormat::deserialize(bytes)?;
+                Ok(())
+            }
         }
     }
 }
@@ -246,6 +262,9 @@ impl EffectFFI for Effect {
             }
             Self::Projection(request) => {
                 request.serialize(|operation| EffectFfi::Projection(Box::new(operation)))
+            }
+            Self::Repository(request) => {
+                request.serialize(|operation| EffectFfi::Repository(Box::new(operation)))
             }
         }
     }

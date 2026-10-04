@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             | Effect::Session(_)
             | Effect::Projection(_)
             | Effect::Resource(_)
+            | Effect::Repository(_)
             | Effect::Configuration(_) => {
                 return Err(io::Error::other("unexpected workspace operation").into());
             }

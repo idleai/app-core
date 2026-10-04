@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 12)
+check(core.protocolVersion() == 13)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -55,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources, configuration: idle.configuration))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources, configuration: idle.configuration, repository: idle.repository))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 

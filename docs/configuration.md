@@ -5,7 +5,7 @@
 provider record, draft, base revision, dirty/conflict flags, validation feedback,
 load state, save state, immutable pending save and available actions.
 
-Shell protocol **12** includes `Event::Configuration`, `Effect::Configuration`,
+Shell protocol **13** includes `Event::Configuration`, `Effect::Configuration`,
 `EffectFfi::Configuration` and `ConfigurationResponse`, with a reviewed revision
 on `Rebase`, a distinct `Refreshing` load state and host-restorable drafts. Native clients must regenerate
 matching codecs. Rust hosts resolve the boxed typed request with

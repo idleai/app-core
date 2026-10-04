@@ -24,7 +24,7 @@ thiserror = "2"
 editchain-core = { path = "../../../editchain/crates/editchain-core" }
 serde_json = "1"
 idle-history = { path = "../../../host-tools/crates/idle-history" }
-idle-protocol = { path = "../../../host-tools/crates/idle-protocol" }
+idle-protocol = { path = "../../../host-tools/crates/idle-protocol", features = ["reflection"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 editchain-engine = { path = "../../../editchain/crates/editchain-engine" }
