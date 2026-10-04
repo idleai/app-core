@@ -77,13 +77,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/web-ui
-          ref: 7512aa6617588ef675d10d4acda8c4a49a81c0b4
+          ref: 9af0645b8782e9cfd551b9a4f9374860a0b2eb5c
           path: web-ui
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
           repository: idleai/vscode-extension
-          ref: d7ca8386facebef296232cecae67c80bd6069856
+          ref: 71aead340afab348a7c66b07eabb8668bb8b218b
           path: vscode-extension
           persist-credentials: false
       - uses: actions/checkout@v4
