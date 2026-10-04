@@ -186,7 +186,7 @@ pub enum ModelFeature {
     Images,
 }
 
-/// Published serving model; presence alone says nothing about installation.
+/// Published serving model; a directory entry does not establish installation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,

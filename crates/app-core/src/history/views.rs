@@ -114,7 +114,7 @@ pub struct ItemView {
     pub blocks: Vec<BlockView>,
     /// Whether the client expanded this item.
     pub expanded: bool,
-    /// Explicit full-item scan progress; page presence alone proves no completeness.
+    /// Explicit full-item scan progress; loading a page does not establish completeness.
     pub paging: Paging,
 }
 

@@ -25,7 +25,7 @@ pub struct EditorContext {
 /// Neither session ownership nor sharing a host establishes this association.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SessionConnection {
-    /// Connection from this workspace's presence state.
+    /// Connection from this workspace's peer activity state.
     pub connection_id: String,
     /// Session in the same workspace's directory.
     pub session_id: String,
@@ -36,7 +36,7 @@ pub struct SessionConnection {
 pub struct AwarenessInput<'a> {
     /// Current editor observation and selected binding.
     pub editor: &'a EditorContext,
-    /// Accepted shared selection, membership and presence state.
+    /// Accepted shared selection, membership and peer activity state.
     pub workspace: &'a ViewModel,
     /// Reconciled directory, including current grants and host publications.
     pub directory: &'a RecoverySnapshot,

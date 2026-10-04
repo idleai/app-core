@@ -71,7 +71,7 @@ pub enum MemberRole {
 pub enum MemberStatus {
     /// Current membership, still subject to resource grants.
     Active,
-    /// Membership has been revoked; presence is suppressed.
+    /// Membership has been revoked; peer activity is suppressed.
     Revoked,
 }
 
@@ -114,7 +114,7 @@ pub struct WorkspaceSnapshot {
     pub provider_ids: Vec<String>,
 }
 
-/// Fresh presence observations, with unknown distinct from explicitly offline.
+/// Member connection status, with unknown distinct from explicitly offline.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
 pub enum PresenceStatus {
@@ -136,7 +136,7 @@ pub enum PresenceStatus {
     reason = "Facet reflection helpers do not impose safety invariants on these fields"
 )]
 pub struct PresenceEntry {
-    /// Connection identity unique inside this workspace's presence snapshot.
+    /// Connection identity unique inside this workspace's peer activity snapshot.
     pub connection_id: String,
     /// Actual contributor, never inferred from a host label.
     pub contributor_id: String,
@@ -158,7 +158,7 @@ pub struct PresenceEntry {
     pub valid_until_ms: u64,
 }
 
-/// Full presence replacement from the selected workspace's adapter.
+/// Full peer activity replacement from the selected workspace's adapter.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[expect(
     clippy::unsafe_derive_deserialize,
@@ -187,7 +187,7 @@ pub enum WorkspaceOperation {
         /// Coordination route selected from the directory.
         mode: WorkspaceMode,
     },
-    /// Fetch current presence through the same authorized provider.
+    /// Fetch current peer activity through the same authorized provider.
     Presence {
         /// Exact workspace scope.
         workspace_id: String,
@@ -204,7 +204,7 @@ pub enum WorkspaceResult {
     Directory(Vec<WorkspaceInfo>),
     /// Selected workspace metadata.
     Snapshot(WorkspaceSnapshot),
-    /// Selected workspace presence.
+    /// Selected workspace peer activity.
     Presence(PresenceSnapshot),
 }
 
@@ -340,9 +340,9 @@ pub struct WorkspaceViewModel {
     pub snapshot: Option<WorkspaceSnapshot>,
     /// Selected workspace/member loading progress/error.
     pub snapshot_state: WorkspaceRequestState,
-    /// Members with fresh presence, without conflating humans and hosts.
+    /// Members with fresh peer activity, without conflating humans and hosts.
     pub members: Vec<MemberView>,
-    /// Independent presence loading progress/error.
+    /// Independent peer activity loading progress/error.
     pub presence_state: WorkspaceRequestState,
     /// Invalid user selection without discarding a valid current context.
     pub selection_error: Option<WorkspaceError>,

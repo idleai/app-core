@@ -254,7 +254,7 @@ fn offline_expired_future_and_revoked_peers_are_hidden() {
     scenario.sync_metadata();
     assert!(
         scenario.view().peers.is_empty(),
-        "revocation wins over lingering presence"
+        "revocation wins over lingering peer activity"
     );
 }
 
@@ -272,7 +272,7 @@ fn mismatched_stale_or_ambiguous_contexts_fail_closed() {
     assert_eq!(
         PeerAwareness::default().update(&scenario.input()),
         Err(AwarenessError::Unavailable),
-        "loading presence is stale"
+        "loading peer activity is stale"
     );
     let mut scenario = Scenario::new(WorkspaceMode::Managed);
     scenario.directory.as_of.contributor_id = "other-user".into();

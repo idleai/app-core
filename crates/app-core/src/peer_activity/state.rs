@@ -65,7 +65,7 @@ impl PeerAwareness {
             .editor
             .as_ref()
             .filter(|previous| same_checkout(previous, input.editor));
-        // Presence timestamps are observations, not recovery cursors. Older or
+        // Peer activity timestamps are observations, not recovery cursors. Older or
         // conflicting observations cannot establish a new branch transition.
         for (_, connection) in &projection.peers {
             if self

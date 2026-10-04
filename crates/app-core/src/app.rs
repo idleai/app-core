@@ -33,7 +33,7 @@ pub enum Event {
     Bootstrap(bootstrap::Event),
     /// Route a semantic history action.
     History(history::Event),
-    /// Route workspace selection, membership and presence actions.
+    /// Route workspace selection, membership and peer activity actions.
     Workspace(workspace::Event),
     /// Route shared joins, reconnects and subscription lifetimes.
     Subscriptions(subscriptions::Event),
@@ -62,7 +62,7 @@ pub struct ViewModel {
     pub bootstrap: bootstrap::ViewModel,
     /// Shared history interaction, stored records and field content.
     pub history: history::ViewModel,
-    /// Shared workspace/repository navigation, members and presence.
+    /// Shared workspace/repository navigation, members and peer activity.
     pub workspace: workspace::ViewModel,
     /// Shared connection status and reconciliation readiness.
     pub subscriptions: subscriptions::SubscriptionViewModel,

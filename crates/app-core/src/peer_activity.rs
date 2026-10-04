@@ -1,4 +1,4 @@
-//! Peer-awareness views over accepted application state in either coordination mode.
+//! Peer activity views, branch invitations and session/host join preparation.
 //!
 //! Adapters pass a reconciled directory and workspace view, then serialize
 //! [`AwarenessView`] for a client host. They must call [`prepare_join`]

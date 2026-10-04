@@ -72,7 +72,7 @@ pub enum Effect {
     HostInfo(Request<HostInfoOperation>),
     /// Execute a chain-scoped history query or platform history action.
     History(Box<Request<Query>>),
-    /// Execute authorized workspace discovery, membership or presence reads.
+    /// Execute authorized workspace discovery, membership or peer activity reads.
     Workspace(Box<Request<WorkspaceOperation>>),
     /// Execute authorized joins, buffered change watches, release or retry timers.
     Subscription(Box<Request<SubscriptionOperation>>),

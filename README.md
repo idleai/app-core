@@ -14,8 +14,8 @@ Check out `idleai/editchain` at `../editchain` and `idleai/host-tools` at
 `../host-tools`. Host-tools owns the independent `idle-protocol`, `idle-history`
 and native history service packages. Portable query/result types come from
 `idle-history`; native effect adapters delegate reads to `idle-history-native`
-with its service feature disabled. This workspace owns peer-awareness views,
-branch invitation state and join preparation in `presence`. Actual authorization
+with its service feature disabled. This workspace owns peer activity views,
+branch invitation state and join preparation in `peer_activity`. Authorization
 remains with coordination/runtime services. This workspace has no renderer or
 VS Code dependency. Graph geometry lives in web-ui; platform actions remain in
 the client host. [rust-toolchain.toml](rust-toolchain.toml) pins Rust and the
@@ -61,7 +61,7 @@ Integration guides:
 
 - [Runtime and native bindings](docs/runtime.md) — host effect loop, codecs and packaging.
 - [History](docs/history.md) — selection, search, paging and recorded content.
-- [Workspaces](docs/workspace.md) — repository bindings, members and presence.
+- [Workspaces](docs/workspace.md) — repository bindings, members and peer activity.
 - [Sessions](docs/sessions.md) — creation, sharing, explicit history bindings and attributed input.
 - [Resources](docs/resources.md) — compute/providers, model actions, progress and controller status.
 - [Settings and agent rules](docs/configuration.md) — versioned documents, drafts, conflicts and save feedback.

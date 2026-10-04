@@ -104,7 +104,7 @@ pub(super) fn presence(
     snapshot: &WorkspaceSnapshot,
 ) -> Result<(), WorkspaceError> {
     if presence.workspace_id != snapshot.workspace.id {
-        return Err(invalid("Presence belongs to a different workspace"));
+        return Err(invalid("Peer activity belongs to a different workspace"));
     }
     unique_ids(
         presence
@@ -117,15 +117,15 @@ pub(super) fn presence(
             .members
             .iter()
             .find(|member| member.contributor_id == entry.contributor_id)
-            .ok_or_else(|| invalid("Presence references an unknown workspace member"))?;
-        // Revocation wins even if the presence source has not caught up yet.
+            .ok_or_else(|| invalid("Peer activity references an unknown workspace member"))?;
+        // Revocation wins even if the peer activity source has not caught up yet.
         if member.status == MemberStatus::Revoked {
             continue;
         }
         if entry.observed_at_ms > presence.as_of_ms || entry.valid_until_ms <= entry.observed_at_ms
         {
             return Err(invalid(
-                "Presence observation has an invalid freshness interval",
+                "Peer activity observation has an invalid freshness interval",
             ));
         }
         if entry.repository_id.as_ref().is_some_and(|id| {
@@ -137,7 +137,7 @@ pub(super) fn presence(
         }) || (entry.repository_id.is_none() && (entry.file.is_some() || entry.branch.is_some()))
         {
             return Err(invalid(
-                "Presence location is outside this workspace's repositories",
+                "Peer activity location is outside this workspace's repositories",
             ));
         }
         if entry
@@ -145,7 +145,7 @@ pub(super) fn presence(
             .as_ref()
             .is_some_and(|id| !snapshot.host_ids.contains(id))
         {
-            return Err(invalid("Presence host is not bound to this workspace"));
+            return Err(invalid("Peer activity host is not bound to this workspace"));
         }
     }
     Ok(())

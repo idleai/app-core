@@ -69,7 +69,7 @@ content and file comparisons. Rust hosts resolve boxed history requests with
 `request.as_mut()`.
 
 See [workspace integration](workspace.md) for both coordination modes,
-repository-to-chain bindings, member/presence views and navigation. Hosts resolve
+repository-to-chain bindings, member activity views and navigation. Hosts resolve
 boxed workspace requests with `request.as_mut()`. Workspace selection wires the
 logical chain into history; repository changes within a workspace retain it.
 

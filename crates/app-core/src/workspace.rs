@@ -1,4 +1,4 @@
-//! Workspace navigation, membership and presence. Owner: f22/workspace-state.
+//! Workspace navigation, membership and peer activity. Owner: f22/workspace-state.
 //!
 //! Hosts discover authorized workspaces and resolve [`WorkspaceOperation`] through
 //! standalone or managed adapters. Each workspace has one immutable logical chain;
