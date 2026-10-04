@@ -15,10 +15,8 @@ use crate::resources::{
 };
 
 fn source() -> RecoverySnapshot {
-    let response: Response<QueryResult> = serde_json::from_str(include_str!(
-        "../../../../../../host-tools/crates/idle-protocol/tests/fixtures/standalone_snapshot.json"
-    ))
-    .expect("f20 snapshot");
+    let response: Response<QueryResult> =
+        serde_json::from_str(idle_protocol::fixtures::STANDALONE_SNAPSHOT).expect("f20 snapshot");
     let value = if let ApiResult::Success(QueryResult::Snapshot(snapshot)) = response.result {
         Some(*snapshot)
     } else {

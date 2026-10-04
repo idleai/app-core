@@ -12,7 +12,7 @@ repository = "https://github.com/idleai/app-core"
 crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
-app-core = { path = "../app-core" }
+app-core = { registry = "idle-app-core", version = "0.1.0", path = "../app-core" }
 boltffi = { version = "=0.29.3", default-features = false }
 thiserror = "2"
 

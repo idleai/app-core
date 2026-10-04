@@ -9,6 +9,8 @@ mod app;
 pub mod bootstrap;
 pub mod configuration;
 pub mod effects;
+#[cfg(feature = "peer-fixtures")]
+pub mod fixtures;
 pub mod history;
 pub mod module;
 pub mod peer_activity;
