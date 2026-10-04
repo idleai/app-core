@@ -1,18 +1,22 @@
 [package]
+publish = ["idle-app-core"]
 name = "app-core"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT"
-publish = false
 description = "Idle shared application state, Crux reducers and host effect protocol"
 repository = "https://github.com/idleai/app-core"
+readme = "../../README.md"
+keywords = ["idle", "ui", "application"]
+categories = ["gui"]
 
 [features]
 typegen = ["dep:facet_generate"]
-session-fixtures = []
+session-fixtures = ["idle-protocol/fixtures"]
 projection-fixtures = []
-resource-fixtures = []
+resource-fixtures = ["idle-protocol/fixtures"]
+peer-fixtures = []
 
 [dependencies]
 crux_core = { version = "=0.20.0", default-features = false }
@@ -21,16 +25,17 @@ bincode = "=1.3.3"
 facet = "=0.46.5"
 facet_generate = { version = "=0.19.0", optional = true, default-features = false, features = ["swift", "kotlin"] }
 thiserror = "2"
-editchain-core = { path = "../../../editchain/crates/editchain-core" }
+editchain-core = { registry = "idle-editchain", version = "0.1.0" }
 serde_json = "1"
-idle-history = { path = "../../../host-tools/crates/idle-history" }
-idle-protocol = { path = "../../../host-tools/crates/idle-protocol", features = ["reflection"] }
+idle-history = { registry = "idle-host-tools", version = "0.1.0" }
+idle-protocol = { registry = "idle-host-tools", version = "0.1.0", features = ["reflection"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-idle-history-native = { path = "../../../host-tools/crates/idle-history-native", default-features = false }
-editchain-engine = { path = "../../../editchain/crates/editchain-engine" }
+idle-history-native = { registry = "idle-host-tools", version = "0.1.0", default-features = false }
+editchain-engine = { registry = "idle-editchain", version = "0.1.0" }
 
 [dev-dependencies]
+idle-protocol = { registry = "idle-host-tools", version = "0.1.0", features = ["fixtures"] }
 tempfile = "3"
 
 [[bin]]

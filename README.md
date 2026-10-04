@@ -10,8 +10,8 @@ their owning hosts and services.
 | [app-core](crates/app-core) | Shared events, reducers, effects and view models. |
 | [app-core-bindings](crates/app-core-bindings) | BoltFFI bindings for Swift and Kotlin hosts. |
 
-Check out `idleai/editchain` at `../editchain` and `idleai/host-tools` at
-`../host-tools`. Host-tools owns the independent `idle-protocol`, `idle-history`
+Cargo downloads the versions and checksums in `Cargo.lock` from producer-owned
+GitHub releases. Host-tools owns the independent `idle-protocol`, `idle-history`
 and native history service packages. Portable query/result types come from
 `idle-history`; native effect adapters delegate reads to `idle-history-native`
 with its service feature disabled. This workspace owns peer activity views,
@@ -39,22 +39,21 @@ The full check runs Rust lint/tests, native and WASM builds, binding generation,
 and Swift/Kotlin round trips through the native library. Apple/Android device
 builds require their platform SDKs separately.
 
-Check public API changes against sibling `web` and `vscode-extension` checkouts:
+Check public API changes against the released extension consumer:
 
 ```sh
 bash scripts/check-consumers.sh
 ```
 
-This checks each native workspace and browser WASM target with locked dependencies
-and runs the effect-dispatch tests. Every requested checkout is required. Pass
-`web` or `vscode-extension` to check one consumer. CI checks the published extension;
-the browser check currently runs locally until its repository is published.
-CI pins sibling source revisions in `.github/workflows/ci.yml`; update those refs
-together after checking the selected source combination locally. Referenced
-commits must be published in their repositories before remote CI can fetch them.
+`consumer-dependencies.json` records its source archive version and checksum.
+The check applies the candidate app-core through a temporary Cargo override,
+checks native and WASM targets and runs the effect-dispatch tests. For a local
+consumer checkout, pass its explicit path, such as
+`bash scripts/check-consumers.sh ../web`. The local browser repository has no
+published consumer release yet.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **13** requires matching native bindings and
+under ignored `dist/`. Shell protocol **14** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:
@@ -74,3 +73,31 @@ exceptions are in [deny.toml](deny.toml).
 
 See [repository integration](docs/repository.md) for Git/GitHub reads, recorded
 session selection and the shell protocol 14 boundary.
+
+## Package releases
+
+Our reusable crates are stored as `.crate` assets in this repository's GitHub
+Releases. The `cargo-index` branch contains the Cargo sparse index; its entries
+include immutable archive checksums. `.cargo/config.toml` registers the indexes.
+Normal checks use the committed lockfile and need only this repository's source.
+
+Release-plz accumulates version and changelog changes in a release PR. Merging
+that PR creates package tags and runs `scripts/release-crates.py` to verify and
+publish the archives and update the index. Releases can batch several feature
+PRs. Dependabot groups compatible Rust dependency updates for review.
+
+A weekly workflow groups compatible native/consumer release updates, including
+archive checksums and compatible Cargo lockfile updates, into one dependency PR. It selects only complete releases
+and explicitly starts the regular CI checks for the generated PR.
+
+
+## Coordinated development
+
+For ordinary local Rust work, add a temporary Cargo patch for the relevant
+registry and pass it with `cargo --config /absolute/path/local.toml ...`.
+Keep these overrides out of committed manifests and lockfiles. Full checks with
+an unpublished producer can use `memos/scripts/check-integration.py` with
+explicit `--producer` and `--consumer` checkout paths. It temporarily patches
+Cargo, builds candidate native bundles when needed, runs the consumer's normal
+check script and restores its dependency files. The manual **Unpublished package
+integration** workflow in memos runs the same check for selected branches.

@@ -9,3 +9,4 @@
 !.env.example
 .editchain/
 scripts/swift-smoke/.build/
+__pycache__/

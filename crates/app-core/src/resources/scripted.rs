@@ -76,16 +76,8 @@ impl ScriptedResources {
 /// Rejects malformed embedded f20 data or an inconsistent fixture runtime binding.
 pub fn demo_snapshot(mode: WorkspaceMode) -> Result<ResourceSnapshot, ResourceError> {
     let json = match mode {
-        WorkspaceMode::Standalone => {
-            include_str!(
-                "../../../../../host-tools/crates/idle-protocol/tests/fixtures/standalone_snapshot.json"
-            )
-        }
-        WorkspaceMode::Managed => {
-            include_str!(
-                "../../../../../host-tools/crates/idle-protocol/tests/fixtures/managed_snapshot.json"
-            )
-        }
+        WorkspaceMode::Standalone => idle_protocol::fixtures::STANDALONE_SNAPSHOT,
+        WorkspaceMode::Managed => idle_protocol::fixtures::MANAGED_SNAPSHOT,
     };
     let response: Response<QueryResult> = serde_json::from_str(json)
         .map_err(|error| validation::invalid(&format!("Invalid resource fixture: {error}")))?;
