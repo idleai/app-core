@@ -10,3 +10,4 @@
 .editchain/
 scripts/swift-smoke/.build/
 __pycache__/
+/releases/

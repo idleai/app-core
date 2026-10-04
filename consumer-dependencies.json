@@ -5,7 +5,7 @@
       "repository": "idleai/vscode-extension",
       "tag": "idle-vscode-webview-v0.1.0",
       "package": "idle-vscode-webview",
-      "sha256": "1fa38fb85de77bd9fe5b10a4c70348d9026b129444cb29475789e4fc2ffe4610"
+      "sha256": "af1db2f88543ec4e0634afb08d00c15d56fb083b41d7b7197aa318b0b6c38d23"
     }
   }
 }
