@@ -35,7 +35,7 @@ let core = AppCore()
 let other = AppCore()
 let idle = try view(core)
 check(!idle.initialized && idle.bootstrap == .idle && idle.history.chain == nil)
-check(core.protocolVersion() == 11)
+check(core.protocolVersion() == 14)
 check(try view(core) == idle)
 try rejected { _ = try core.processEvent(event: Data("invalid".utf8)) }
 try rejected { _ = try core.processEvent(event: Data([1, 0, 0, 0, 1, 0, 0, 0])) }
@@ -55,7 +55,7 @@ let renders = try EffectBatch.bincodeDeserialize(
     input: Array(core.handleResponse(id: id, response: success))
 ).requests
 check(renders.map(\.effect) == [.render])
-check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources, configuration: idle.configuration))
+check(try view(core) == ViewModel(initialized: true, bootstrap: .ready(info), history: idle.history, workspace: idle.workspace, subscriptions: idle.subscriptions, sessions: idle.sessions, projections: idle.projections, resources: idle.resources, configuration: idle.configuration, repository: idle.repository))
 try rejected { _ = try core.handleResponse(id: id, response: success) }
 check(try view(other) == idle)
 
@@ -216,9 +216,9 @@ print("Swift session attribution + receipt + runtime completion + expiry in both
 func projectionSmoke() throws {
     let client = AppCore()
     let context = Context(provider: "managed", workspace: "workspace", contributor: "alice", chain: "chain")
-    let load = try request(send(client, .projections(.connect(context))), .projection(ProjectionQuery(context: context, limit: 100)))
+    let load = try request(send(client, .projections(.connect(context))), .projection(ProjectionQuery(context: context, limit: 100, refreshSources: false)))
     let source = ProjectionReference(observation: String(repeating: "ab", count: 32), item: String(repeating: "cd", count: 32), recordHash: String(repeating: "ef", count: 32))
-    let row = ProjectionRow(key: "stable-task", title: "Check 🌍", summary: "Exact details\n", status: "provider/active", labels: ["supplied"], sources: [source], related: [])
+    let row = ProjectionRow(key: "stable-task", title: "Check 🌍", summary: "Exact details\n", url: nil, status: "provider/active", labels: ["supplied"], sources: [source], related: [])
     let freshness = ProjectionFreshness(status: .current, generatedAtMs: 1000, checkpoint: "opaque/checkpoint")
     let inputs = [ProjectionKind.activity, .task, .error, .triage, .needInput].map {
         ProjectionInput(kind: $0, freshness: freshness, availability: .complete, total: 1, rows: [row], gaps: [])

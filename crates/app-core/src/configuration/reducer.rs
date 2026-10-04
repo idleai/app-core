@@ -4,10 +4,10 @@ use crux_core::{App, Command, render};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ConfigurationAction, ConfigurationContext, ConfigurationDocument, ConfigurationError,
-    ConfigurationErrorKind, ConfigurationLoadState, ConfigurationOperation, ConfigurationOutput,
-    ConfigurationRequest, ConfigurationResult, ConfigurationSave, ConfigurationSaveState,
-    ConfigurationSnapshot, ConfigurationViewModel, Model, validation,
+    ConfigurationAction, ConfigurationContext, ConfigurationDocument, ConfigurationDraft,
+    ConfigurationError, ConfigurationErrorKind, ConfigurationLoadState, ConfigurationOperation,
+    ConfigurationOutput, ConfigurationRequest, ConfigurationResult, ConfigurationSave,
+    ConfigurationSaveState, ConfigurationSnapshot, ConfigurationViewModel, Model, validation,
 };
 use crate::Effect;
 
@@ -58,6 +58,9 @@ pub enum ConfigurationEvent {
     Reconnect,
     /// Retire all continuations and clear this context's data.
     Disconnect,
+    /// Restore a host-retained draft after loading its current authorized document.
+    /// Preserve newer edits while recovering any original unresolved save.
+    Restore(ConfigurationDraft),
     /// Internal continuation; serialized client events cannot forge saved values.
     #[serde(skip)]
     #[facet(skip)]
@@ -145,6 +148,7 @@ impl App for Configuration {
                 model.reset();
                 render::render()
             }
+            ConfigurationEvent::Restore(draft) => restore(model, draft),
             ConfigurationEvent::Completed { token, result } => complete(model, token, result),
         }
     }
@@ -152,6 +156,66 @@ impl App for Configuration {
     fn view(&self, model: &Model) -> ConfigurationViewModel {
         model.view()
     }
+}
+
+fn restore(model: &mut Model, draft: ConfigurationDraft) -> ConfigurationCommand {
+    if model.context() != Some(&draft.context) {
+        return action_error(
+            model,
+            validation::invalid("Saved draft belongs to another configuration context"),
+        );
+    }
+    let editor = model.editor(draft.document);
+    let keep_edits = editor.dirty();
+    if editor.pending.is_some() || (keep_edits && draft.pending.is_none()) {
+        return Command::done();
+    }
+    if !editor.is_ready()
+        || draft.value.schema_version != super::DOCUMENT_VERSION
+        || draft.value.json.len() > 1024 * 1024
+        || draft
+            .base
+            .as_ref()
+            .is_some_and(|base| base.revision == 0 || validation::value(&base.value).is_err())
+        || draft.pending.as_ref().is_some_and(|save| {
+            save.request.request_id.trim().is_empty()
+                || save.request.request_id.len() > 1024
+                || save.request.expires_at_ms == 0
+                || validation::value(&save.value).is_err()
+                || save.expected_revision != draft.base.as_ref().map(|base| base.revision)
+        })
+    {
+        return action_error(
+            model,
+            validation::invalid(
+                "Saved configuration draft is invalid or its document is not loaded",
+            ),
+        );
+    }
+    if let Some(save) = &draft.pending
+        && !model.used_requests.insert(save.request.request_id.clone())
+    {
+        return action_error(
+            model,
+            validation::invalid("Saved request identity is already in use"),
+        );
+    }
+    let editor = model.editor_mut(draft.document);
+    editor.base = draft.base;
+    if !keep_edits {
+        editor.draft = draft.value;
+    }
+    editor.save = if draft.pending.is_some() {
+        ConfigurationSaveState::Uncertain(validation::error(
+            ConfigurationErrorKind::Unavailable,
+            "Restored save has an unknown outcome",
+        ))
+    } else {
+        ConfigurationSaveState::Idle
+    };
+    editor.pending = draft.pending;
+    model.action_error = None;
+    render::render()
 }
 
 fn action_error(model: &mut Model, error: ConfigurationError) -> ConfigurationCommand {

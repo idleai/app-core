@@ -23,7 +23,8 @@ fn work(effects: Vec<Effect>) -> Work {
             | Effect::Session(_)
             | Effect::Projection(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => {}
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => {}
         }
     }
     work

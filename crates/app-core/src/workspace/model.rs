@@ -21,6 +21,10 @@ pub struct Model {
 }
 
 impl Model {
+    pub(crate) const fn section(&self) -> super::NavigationSection {
+        self.view.section
+    }
+
     /// Resolve the selected workspace to its logical engine reference only.
     #[must_use]
     pub fn chain(&self) -> Option<&str> {

@@ -60,7 +60,8 @@ visible count and a local filter. No geometry or rendering is included.
 | `SetFilter` | Conjunctive literal title/summary text, exact status and all requested labels. Preserves supplied totals and selection. |
 | `Select` | Selects a stable row key, independent of its current observations. |
 | `Inspect` | Checks that the row supplied the requested source/related reference and selects it in history. Observation-only references refresh exact details and resolve an item only when recorded data supplies it. |
-| `Refresh` | Requests a complete replacement; retained rows become stale. Changes during a read queue one follow-up. |
+| `Refresh` | Requests a complete replacement with `refresh_sources: true`; the host revalidates upstream sources and retained rows become stale. |
+| `Changed` | Reconciles a background change with `refresh_sources: false`, permitting recent source reads. Changes during a read queue one follow-up; an explicit refresh takes priority. |
 | `SetLimit` | Sets the engine candidate budget from 1 through 1000 (default 100) and refreshes. |
 | `Suspend` / `Reconnect` | Retires pending reads, then reads a new snapshot after reconnection. |
 | `Disconnect` | Clears local state without stopping a controller or changing persisted history. |
@@ -109,3 +110,10 @@ subscription changes, missing/late content, bounded reads, duplicate delivery,
 lower-ID inserts, conflict retractions and index rebuilds. Swift and Kotlin smoke
 checks exercise the generated projection codecs. Live f11/f13 mapping and f54
 managed service integration remain with those feature owners.
+
+Standalone repository hosts can supply GitHub-derived inputs through
+`idle-repository`. Optional row source URLs are separate from exact history
+references and must pass HTTPS validation. The native host rechecks stored source
+hashes and Original content before admitting rows. The four GitHub views and their read bounds are
+documented in [repository integration](repository.md); Activity remains an engine
+read even if that adapter is unavailable.

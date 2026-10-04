@@ -27,7 +27,7 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `11`; includes history, workspace, subscription, session, projection, resource and configuration payloads. |
+| `protocol_version()` | Returns `14`; includes history, workspace, subscription, session, projection, resource, configuration and repository payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
 | `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse`, `ResourceResponse` or `ConfigurationResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
@@ -114,6 +114,11 @@ generate bindings and run the host smoke tests. Binary payload layout depends on
 field and variant order: coordinate incompatible changes with hosts and bump
 `PROTOCOL_VERSION`. The Rust wire-layout test and foreign-language round trips
 check codec compatibility.
+
+Protocol 14 adds `ProjectionQuery::refresh_sources` and
+`ProjectionEvent::Changed`. Explicit projection refreshes revalidate upstream
+sources; background changes permit recent source reads and cannot replace a
+queued explicit refresh. Regenerate native codecs together with the library.
 
 See [configuration integration](configuration.md) for independent versioned settings
 and agent-rule editors. Protocol 10 adds `Event::Configuration`,

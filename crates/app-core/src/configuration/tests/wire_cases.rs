@@ -100,7 +100,7 @@ fn both_routes_use_the_versioned_coordination_envelope_with_conditional_writes()
 #[test]
 fn configuration_shell_preserves_full_revisions_and_rejects_bad_responses_before_consumption() {
     assert_eq!(
-        PROTOCOL_VERSION, 11,
+        PROTOCOL_VERSION, 14,
         "reviewed configuration revisions extend the binary shell protocol"
     );
     let shell = Shell::new();

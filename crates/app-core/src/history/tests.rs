@@ -72,7 +72,8 @@ fn requests(effects: Vec<Effect>) -> Vec<Request<Query>> {
             | Effect::Session(_)
             | Effect::Projection(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => None,
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => None,
         })
         .collect()
 }

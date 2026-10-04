@@ -24,6 +24,7 @@ fn query(limit: u32) -> ProjectionQuery {
     ProjectionQuery {
         context: context(),
         limit,
+        refresh_sources: false,
     }
 }
 

@@ -52,6 +52,7 @@ fn snapshot() -> ProjectionSnapshot {
                     key: "stable-row".into(),
                     title: "Check exact text".into(),
                     summary: Some("Supplied details 🌍\n".into()),
+                    url: None,
                     status: Some("provider/active".into()),
                     labels: vec!["provider/label".into()],
                     sources: vec![reference()],
@@ -82,7 +83,8 @@ fn request(effects: Vec<Effect>) -> Request<ProjectionQuery> {
             | Effect::Subscription(_)
             | Effect::Session(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => None,
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => None,
         })
         .expect("projection request")
 }

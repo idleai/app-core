@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 use idle_history::requests::RequestTracker;
 
 use super::{
-    ConfigurationContext, ConfigurationDocument, ConfigurationEditorAction,
+    ConfigurationContext, ConfigurationDocument, ConfigurationDraft, ConfigurationEditorAction,
     ConfigurationEditorView, ConfigurationError, ConfigurationErrorKind, ConfigurationLoadState,
     ConfigurationOperation, ConfigurationRecord, ConfigurationSave, ConfigurationSaveState,
     ConfigurationSnapshot, ConfigurationValue, ConfigurationViewModel, validation,
@@ -203,6 +203,27 @@ impl Model {
             settings: self.settings.view(),
             agent_rules: self.agent_rules.view(),
             action_error: self.action_error.clone(),
+            drafts: self.context.as_ref().map_or_else(Vec::new, |context| {
+                [
+                    ConfigurationDocument::Settings,
+                    ConfigurationDocument::AgentRules,
+                ]
+                .into_iter()
+                .filter(|document| {
+                    self.editor(*document).dirty() || self.editor(*document).pending.is_some()
+                })
+                .map(|document| {
+                    let editor = self.editor(document);
+                    ConfigurationDraft {
+                        context: context.clone(),
+                        document,
+                        base: editor.base.clone(),
+                        value: editor.draft.clone(),
+                        pending: editor.pending.clone(),
+                    }
+                })
+                .collect()
+            }),
         }
     }
 }

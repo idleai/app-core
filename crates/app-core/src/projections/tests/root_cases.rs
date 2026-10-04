@@ -24,7 +24,8 @@ fn subscription_request(effects: Vec<Effect>) -> Request<SubscriptionOperation> 
             | Effect::Session(_)
             | Effect::Projection(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => None,
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => None,
         })
         .expect("subscription request")
 }
@@ -41,7 +42,8 @@ fn workspace_request(effects: Vec<Effect>) -> Request<WorkspaceOperation> {
             | Effect::Session(_)
             | Effect::Projection(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => None,
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => None,
         })
         .expect("workspace request")
 }
@@ -114,7 +116,8 @@ fn subscription_changes_refresh_projections_and_audience_changes_clear_them() {
             | Effect::Workspace(_)
             | Effect::Session(_)
             | Effect::Resource(_)
-            | Effect::Configuration(_) => {}
+            | Effect::Configuration(_)
+            | Effect::Repository(_) => {}
         }
     }
     let mut projection = projection.expect("fresh read after join");
