@@ -15,6 +15,8 @@ use facet_generate::{
     generation::{bincode::BincodePlugin, kotlin, swift},
     reflection::RegistryBuilder,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use idle_history_native as _;
 use serde as _;
 use thiserror as _;
 

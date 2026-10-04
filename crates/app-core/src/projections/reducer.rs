@@ -193,7 +193,7 @@ fn complete(model: &mut Model, token: u64, result: ProjectionOutput) -> Projecti
             ));
         }
         let shared = idle_protocol::v1::projections::ProjectionSnapshot::try_from(snapshot)?;
-        shared.try_into()
+        shared.try_into().map_err(Into::into)
     });
     match result {
         Ok(snapshot) => {

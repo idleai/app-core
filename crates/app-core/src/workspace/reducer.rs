@@ -26,9 +26,9 @@ pub enum WorkspaceEvent {
     Navigate(NavigationSection),
     /// Refresh or retry selected workspace metadata and membership.
     RefreshWorkspace,
-    /// Refresh or retry current member presence independently of metadata.
+    /// Refresh or retry current member activity independently of metadata.
     RefreshPresence,
-    /// Advance the host's Unix clock for presence expiry; older ticks are ignored.
+    /// Advance the host's Unix clock for peer activity expiry; older ticks are ignored.
     Tick(u64),
     /// Clear navigation and invalidate pending results, without deleting resources.
     Disconnect,
@@ -345,14 +345,14 @@ fn accept_presence(
         || model.view.selected_workspace.as_deref() != Some(workspace_id)
     {
         return Err(validation::invalid(
-            "Presence belongs to a different workspace",
+            "Peer activity belongs to a different workspace",
         ));
     }
     let snapshot = model
         .view
         .snapshot
         .as_ref()
-        .ok_or_else(|| validation::invalid("Presence requires workspace metadata"))?;
+        .ok_or_else(|| validation::invalid("Peer activity requires workspace metadata"))?;
     validation::presence(&presence, snapshot)?;
     model.now_ms = model.now_ms.max(presence.as_of_ms);
     model.presence = presence.entries;

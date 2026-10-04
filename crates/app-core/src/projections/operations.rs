@@ -38,3 +38,13 @@ pub enum ProjectionResponse {
 impl Operation for ProjectionQuery {
     type Output = ProjectionOutput;
 }
+
+impl From<&ProjectionQuery> for idle_history::projections::ProjectionQuery {
+    fn from(value: &ProjectionQuery) -> Self {
+        Self {
+            context: value.context.clone(),
+            limit: value.limit,
+            refresh_sources: value.refresh_sources,
+        }
+    }
+}

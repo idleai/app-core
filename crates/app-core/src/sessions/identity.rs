@@ -208,7 +208,7 @@ pub struct SessionGrant {
     pub status: SessionGrantStatus,
 }
 
-/// Host capability presence; production adapters start unavailable.
+/// Host capability availability; production adapters start unavailable.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
 #[repr(u8)]
 pub enum SessionCapability {

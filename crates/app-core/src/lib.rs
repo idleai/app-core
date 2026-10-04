@@ -11,6 +11,7 @@ pub mod configuration;
 pub mod effects;
 pub mod history;
 pub mod module;
+pub mod peer_activity;
 pub mod projections;
 pub mod repository;
 pub mod resources;

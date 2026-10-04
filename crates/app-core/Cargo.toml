@@ -27,6 +27,7 @@ idle-history = { path = "../../../host-tools/crates/idle-history" }
 idle-protocol = { path = "../../../host-tools/crates/idle-protocol", features = ["reflection"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+idle-history-native = { path = "../../../host-tools/crates/idle-history-native", default-features = false }
 editchain-engine = { path = "../../../editchain/crates/editchain-engine" }
 
 [dev-dependencies]

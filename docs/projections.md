@@ -77,7 +77,8 @@ when controller-derived state changes without a new visible history record.
 
 ## Native engine adapter and fixtures
 
-`projections::engine::execute(queries, chain, query, mapper)` uses
+`projections::engine::execute(queries, chain, query, mapper)` adapts application
+effects and errors to `idle-history-native::projections`. The shared reader uses
 `ChainQueries::history`, `relationships`, `contents` and `operation` after one
 refresh. The engine receives only a caller-resolved chain; the host handles
 workspace authorization. Browser hosts forward the same portable query to their

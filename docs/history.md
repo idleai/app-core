@@ -25,7 +25,8 @@ let history = core.view().history;
 # }
 ```
 
-The native adapter calls `ChainQueries::history`, `search`, `operation`, `contents`,
+The native adapter delegates to `idle-history-native::query` in host-tools.
+That shared reader calls `ChainQueries::history`, `search`, `operation`, `contents`,
 `record_variants` and `diff`. It refreshes the derived index before reading. A
 browser host forwards the same portable query contract to its engine connection.
 `Open` requests require a platform adapter and return an explicit error from the

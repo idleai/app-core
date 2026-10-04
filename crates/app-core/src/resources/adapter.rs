@@ -22,7 +22,7 @@ use super::{
 };
 
 /// Host-supplied context for an authenticated coordination snapshot. Runtime
-/// capabilities must come from connected adapters, never directory presence.
+/// capabilities must come from connected adapters, never from a directory entry alone.
 #[derive(Clone, Debug)]
 pub struct ResourceAdapterContext {
     /// Authorized connection and workspace binding.
