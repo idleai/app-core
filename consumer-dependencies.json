@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "dependencies": {
+    "vscode-extension": {
+      "repository": "idleai/vscode-extension",
+      "tag": "idle-vscode-webview-v0.1.0",
+      "package": "idle-vscode-webview",
+      "sha256": "af1db2f88543ec4e0634afb08d00c15d56fb083b41d7b7197aa318b0b6c38d23"
+    }
+  }
+}
