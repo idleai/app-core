@@ -218,7 +218,7 @@ func projectionSmoke() throws {
     let context = Context(provider: "managed", workspace: "workspace", contributor: "alice", chain: "chain")
     let load = try request(send(client, .projections(.connect(context))), .projection(ProjectionQuery(context: context, limit: 100)))
     let source = ProjectionReference(observation: String(repeating: "ab", count: 32), item: String(repeating: "cd", count: 32), recordHash: String(repeating: "ef", count: 32))
-    let row = ProjectionRow(key: "stable-task", title: "Check 🌍", summary: "Exact details\n", status: "provider/active", labels: ["supplied"], sources: [source], related: [])
+    let row = ProjectionRow(key: "stable-task", title: "Check 🌍", summary: "Exact details\n", url: nil, status: "provider/active", labels: ["supplied"], sources: [source], related: [])
     let freshness = ProjectionFreshness(status: .current, generatedAtMs: 1000, checkpoint: "opaque/checkpoint")
     let inputs = [ProjectionKind.activity, .task, .error, .triage, .needInput].map {
         ProjectionInput(kind: $0, freshness: freshness, availability: .complete, total: 1, rows: [row], gaps: [])

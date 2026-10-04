@@ -324,7 +324,7 @@ private fun projectionSmoke() = AppCore().use { client ->
     val load = send(client, Event.Projections(ProjectionEvent.Connect(context)))
         .request(EffectFfi.Projection(ProjectionQuery(context, 100u)))
     val source = ProjectionReference("ab".repeat(32), "cd".repeat(32), "ef".repeat(32))
-    val row = ProjectionRow("stable-task", "Check 🌍", "Exact details\n", "provider/active", listOf("supplied"), listOf(source), emptyList())
+    val row = ProjectionRow("stable-task", "Check 🌍", "Exact details\n", null, "provider/active", listOf("supplied"), listOf(source), emptyList())
     val freshness = ProjectionFreshness(FreshnessStatus.CURRENT, 1000uL, "opaque/checkpoint")
     val inputs = listOf(ProjectionKind.ACTIVITY, ProjectionKind.TASK, ProjectionKind.ERROR, ProjectionKind.TRIAGE, ProjectionKind.NEEDINPUT).map {
         ProjectionInput(it, freshness, ProjectionAvailability.COMPLETE, 1uL, listOf(row), emptyList())

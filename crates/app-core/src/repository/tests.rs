@@ -432,3 +432,71 @@ fn repository_shell_round_trip_retains_session_sources_and_rejects_forged_comple
         "clients cannot inject host completions"
     );
 }
+
+#[test]
+fn selecting_a_different_repository_on_the_same_chain_retires_the_old_reader() {
+    use crate::workspace::{self, RepositoryInfo, WorkspaceInfo, WorkspaceMode, WorkspaceResult};
+    let core = Core::new();
+    let mut load = core
+        .process_event(RootEvent::Workspace(workspace::Event::Load))
+        .into_iter()
+        .find_map(|effect| {
+            if let Effect::Workspace(request) = effect {
+                Some(*request)
+            } else {
+                None
+            }
+        })
+        .expect("directory request");
+    let context = context("workspace");
+    let info = WorkspaceInfo {
+        id: context.connection.workspace.clone(),
+        name: "Workspace".into(),
+        chain: context.connection.chain.clone(),
+        revision: 1,
+        mode: WorkspaceMode::Managed,
+        repositories: vec![
+            RepositoryInfo {
+                id: context.repository_id.clone(),
+                name: "First".into(),
+                remote: None,
+            },
+            RepositoryInfo {
+                id: "other".into(),
+                name: "Other".into(),
+                remote: None,
+            },
+        ],
+    };
+    let _effects = core
+        .resolve(&mut load, Ok(WorkspaceResult::Directory(vec![info])))
+        .expect("directory");
+    let _effects = core.process_event(RootEvent::Workspace(workspace::Event::SelectWorkspace(
+        "workspace".into(),
+    )));
+    let _effects = core.process_event(RootEvent::Workspace(workspace::Event::SelectRepository(
+        Some(context.repository_id.clone()),
+    )));
+    loaded(&core, &context);
+    let mut previous = request(send(&core, Event::Refresh));
+    let _effects = core.process_event(RootEvent::Workspace(workspace::Event::SelectRepository(
+        Some("other".into()),
+    )));
+    assert!(
+        core.view().repository.context.is_none(),
+        "repository change retires data even when the chain is unchanged"
+    );
+    let _effects = core
+        .resolve(
+            &mut previous,
+            Ok(RepositoryResult::Snapshot {
+                snapshot: Box::new(snapshot(&context)),
+                selected_session: None,
+            }),
+        )
+        .expect("retired read");
+    assert!(
+        core.view().repository.snapshot.is_none(),
+        "old repository response cannot restore its rows"
+    );
+}

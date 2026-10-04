@@ -174,6 +174,22 @@ impl App for IdleApp {
                     model.workspace.coordination_mode(),
                 );
                 if before == after {
+                    let binding = workspace::Workspace
+                        .view(&model.workspace)
+                        .repository_binding;
+                    let retired = model.workspace.owns_history()
+                        && model.repository.context().is_some_and(|context| {
+                            !binding.as_ref().is_some_and(|binding| {
+                                binding.workspace_id == context.connection.workspace
+                                    && binding.chain == context.connection.chain
+                                    && binding.repository_id == context.repository_id
+                            })
+                        });
+                    let command = if retired {
+                        command.and(update_repository(repository::Event::Disconnect, model))
+                    } else {
+                        command
+                    };
                     return command.and(navigate_repository(navigation, model));
                 }
                 let command =
