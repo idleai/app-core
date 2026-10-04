@@ -129,3 +129,79 @@ fn restore_cannot_replace_new_edits_or_cross_a_context_boundary() {
         "new edits take precedence over a late restore"
     );
 }
+
+#[test]
+fn delayed_restore_recovers_the_original_save_without_replacing_new_edits() {
+    for (document, newer) in [
+        (ConfigurationDocument::Settings, r#"{"new":true}"#),
+        (ConfigurationDocument::AgentRules, "{unfinished"),
+    ] {
+        let source = ready(WorkspaceMode::Standalone);
+        edit(&source, document, r#"{"original":true}"#);
+        let original = save(&source, document, "lost-reply").operation;
+        let retained = source
+            .view()
+            .configuration
+            .drafts
+            .into_iter()
+            .next()
+            .expect("pending draft");
+        let reopened = Core::new();
+        for mut load in requests(send(
+            &reopened,
+            Event::Connect(context(WorkspaceMode::Standalone)),
+        )) {
+            let _effects = super::resolve_load(
+                &reopened,
+                &mut load,
+                Some(record(4, r#"{"original":true}"#)),
+            );
+        }
+        edit(&reopened, document, newer);
+        let _effects = send(&reopened, Event::Restore(retained.clone()));
+        let actual = editor(&reopened, document);
+        assert_eq!(
+            actual.draft.json, newer,
+            "preserve edits made during recovery"
+        );
+        assert_eq!(
+            actual.pending, retained.pending,
+            "preserve the exact unresolved save"
+        );
+        assert!(
+            actual
+                .actions
+                .contains(&ConfigurationEditorAction::RetrySave)
+                && !actual.actions.contains(&ConfigurationEditorAction::Save),
+            "only the original request can be recovered"
+        );
+        let persisted = reopened
+            .view()
+            .configuration
+            .drafts
+            .into_iter()
+            .next()
+            .expect("recoverable draft");
+        let restarted = ready(WorkspaceMode::Standalone);
+        let _effects = send(&restarted, Event::Restore(persisted));
+        for core in [&reopened, &restarted] {
+            let mut retry = requests(send(core, Event::RetrySave(document)))
+                .pop()
+                .expect("original retry");
+            assert_eq!(
+                retry.operation, original,
+                "identity, deadline, base and payload survive"
+            );
+            let _effects = super::commit(core, &mut retry, 4);
+            let actual = editor(core, document);
+            assert_eq!(
+                actual.draft.json, newer,
+                "recovery preserves newer draft text"
+            );
+            assert!(
+                actual.pending.is_none(),
+                "confirmed outcome clears uncertainty"
+            );
+        }
+    }
+}

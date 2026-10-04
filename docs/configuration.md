@@ -139,7 +139,10 @@ Rust state opaque so 64-bit revisions are never rounded.
 After loading the current authorized documents, `Restore(ConfigurationDraft)`
 restores the old base and any uncertain save without executing a write. A changed
 provider revision becomes a visible conflict. Restoration cannot replace newer
-local edits, cross a context boundary or reuse an active request identity. The
+local edits, cross a context boundary or reuse an active request identity. Edits
+made while draft storage is loading keep their text, while any retained pending
+save restores its original base, payload and request identity. Save stays blocked
+until that original request is resolved, including after another restart. The
 host must durably retain the pending draft and exact outgoing command before
 forwarding a save. Reopening then offers recovery of the original request,
 including its original deadline; it never allocates a replacement request for an

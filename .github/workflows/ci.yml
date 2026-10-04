@@ -27,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/host-tools
-          ref: 2a1f861ce78907fc36bfc3d212de58e0903a7ec1
+          ref: cb2ab122a0af387f5e454312f754f79a9ee6b115
           path: host-tools
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: idleai/host-tools
-          ref: 2a1f861ce78907fc36bfc3d212de58e0903a7ec1
+          ref: cb2ab122a0af387f5e454312f754f79a9ee6b115
           path: host-tools
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable

@@ -19,7 +19,7 @@ pub struct Model {
     pub(super) load: ProjectionLoadState,
     pub(super) stale: bool,
     pub(super) suspended: bool,
-    pub(super) refresh_again: bool,
+    pub(super) refresh_again: Option<bool>,
     pub(super) limit: Option<u32>,
     pub(super) requests: RequestTracker<ProjectionQuery>,
     pub(super) action_error: Option<EffectError>,
@@ -75,7 +75,7 @@ impl Model {
 
     pub(super) fn retire_reads(&mut self) {
         self.requests.clear();
-        self.refresh_again = false;
+        self.refresh_again = None;
     }
 
     fn destination(&self, kind: ProjectionKind) -> ProjectionView {

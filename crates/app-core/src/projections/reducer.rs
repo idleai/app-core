@@ -15,7 +15,7 @@ type ProjectionCommand = Command<Effect, ProjectionEvent>;
 pub enum ProjectionEvent {
     /// Bind the current authorized provider/audience and load all destinations.
     Connect(Context),
-    /// Replace all destinations from the start, coalescing changes during a read.
+    /// Revalidate upstream sources and replace all destinations from the start.
     Refresh,
     /// Change the bounded engine read budget (1 through 1000) and refresh.
     SetLimit(u32),
@@ -41,6 +41,8 @@ pub enum ProjectionEvent {
     Reconnect,
     /// Clear this client's projection state and retire all continuations.
     Disconnect,
+    /// Reconcile a background change, allowing hosts to reuse recently read sources.
+    Changed,
     /// Internal result, excluded from serialized client actions.
     #[serde(skip)]
     #[facet(skip)]
@@ -84,9 +86,10 @@ impl App for Projections {
                 }
                 model.reset();
                 model.context = Some(context);
-                refresh(model)
+                refresh(model, false)
             }
-            ProjectionEvent::Refresh => refresh(model),
+            ProjectionEvent::Refresh => refresh(model, true),
+            ProjectionEvent::Changed => refresh(model, false),
             ProjectionEvent::SetLimit(limit) => {
                 if !(1..=1000).contains(&limit) {
                     return action_error(model, "Projection read limit must be between 1 and 1000");
@@ -95,7 +98,7 @@ impl App for Projections {
                     model.retire_reads();
                 }
                 model.limit = Some(limit);
-                refresh(model)
+                refresh(model, false)
             }
             ProjectionEvent::SetFilter { kind, filter } => {
                 drop(model.filters.insert(kind, filter));
@@ -130,7 +133,7 @@ impl App for Projections {
             ProjectionEvent::Reconnect => {
                 model.retire_reads();
                 model.suspended = false;
-                refresh(model)
+                refresh(model, false)
             }
             ProjectionEvent::Disconnect => {
                 model.reset();
@@ -150,18 +153,19 @@ fn action_error(model: &mut Model, message: &str) -> ProjectionCommand {
     render::render()
 }
 
-fn refresh(model: &mut Model) -> ProjectionCommand {
+fn refresh(model: &mut Model, refresh_sources: bool) -> ProjectionCommand {
     let Some(context) = model.context.clone().filter(|_| !model.suspended) else {
         return Command::done();
     };
     if !model.requests.is_empty() {
-        model.refresh_again = true;
+        model.refresh_again = Some(model.refresh_again.unwrap_or(false) || refresh_sources);
         return Command::done();
     }
     model.stale = true;
     let query = ProjectionQuery {
         context,
         limit: model.limit.unwrap_or(100),
+        refresh_sources,
     };
     let Ok(token) = model.requests.register(query.clone(), false) else {
         model.load = ProjectionLoadState::Failed(error("Projection request identities exhausted"));
@@ -209,8 +213,8 @@ fn complete(model: &mut Model, token: u64, result: ProjectionOutput) -> Projecti
             model.stale = true;
         }
     }
-    if std::mem::take(&mut model.refresh_again) {
-        return refresh(model);
+    if let Some(refresh_sources) = model.refresh_again.take() {
+        return refresh(model, refresh_sources);
     }
     render::render()
 }

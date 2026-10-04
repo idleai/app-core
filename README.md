@@ -68,4 +68,4 @@ Contributor rules are in [AGENTS.md](AGENTS.md); dependency policy and its docum
 exceptions are in [deny.toml](deny.toml).
 
 See [repository integration](docs/repository.md) for Git/GitHub reads, recorded
-session selection and the shell protocol 13 boundary.
+session selection and the shell protocol 14 boundary.

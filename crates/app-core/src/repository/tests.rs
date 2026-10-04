@@ -77,6 +77,42 @@ fn send(core: &Core, event: Event) -> Vec<Effect> {
     core.process_event(RootEvent::Repository(event))
 }
 
+fn select_workspace(core: &Core, context: &RepositoryContext) {
+    use crate::workspace::{self, RepositoryInfo, WorkspaceInfo, WorkspaceMode, WorkspaceResult};
+
+    let mut directory = core
+        .process_event(RootEvent::Workspace(workspace::Event::Load))
+        .into_iter()
+        .find_map(|effect| {
+            if let Effect::Workspace(request) = effect {
+                Some(*request)
+            } else {
+                None
+            }
+        })
+        .expect("workspace directory");
+    let _effects = core
+        .resolve(
+            &mut directory,
+            Ok(WorkspaceResult::Directory(vec![WorkspaceInfo {
+                id: context.connection.workspace.clone(),
+                name: "Workspace".into(),
+                chain: context.connection.chain.clone(),
+                revision: 1,
+                mode: WorkspaceMode::Standalone,
+                repositories: vec![RepositoryInfo {
+                    id: context.repository_id.clone(),
+                    name: "Repository".into(),
+                    remote: None,
+                }],
+            }])),
+        )
+        .expect("loaded directory");
+    let _effects = core.process_event(RootEvent::Workspace(workspace::Event::SelectWorkspace(
+        context.connection.workspace.clone(),
+    )));
+}
+
 fn loaded(core: &Core, context: &RepositoryContext) {
     let mut read = request(send(core, Event::Connect(context.clone())));
     let _effects = core
@@ -265,6 +301,57 @@ fn reopened_selection_is_restored_and_transient_source_failures_keep_it() {
     assert!(
         core.view().history.filter.session.is_none(),
         "removed sessions no longer filter activity"
+    );
+}
+
+#[test]
+fn delayed_session_restoration_preserves_activity_until_sessions_is_opened() {
+    use crate::workspace::{Event as WorkspaceEvent, NavigationSection};
+
+    let core = Core::new();
+    let context = context("workspace");
+    select_workspace(&core, &context);
+    let selected = session(1).id;
+    let mut read = request(send(&core, Event::Connect(context.clone())));
+    let _effects = core.process_event(RootEvent::Workspace(WorkspaceEvent::Navigate(
+        NavigationSection::Activity,
+    )));
+    let _effects = core
+        .resolve(
+            &mut read,
+            Ok(RepositoryResult::Snapshot {
+                snapshot: Box::new(snapshot(&context)),
+                selected_session: Some(selected.clone()),
+            }),
+        )
+        .expect("late repository reply");
+    let view = core.view();
+    assert_eq!(
+        view.workspace.section,
+        NavigationSection::Activity,
+        "navigation stays current"
+    );
+    assert_eq!(
+        view.repository.selected_session,
+        Some(selected.clone()),
+        "retain the session preference"
+    );
+    assert!(
+        view.history.filter.session.is_none(),
+        "Activity remains unfiltered"
+    );
+    assert_eq!(
+        view.history.selected,
+        history::Selected::default(),
+        "late restoration cannot change Activity selection"
+    );
+    let _effects = core.process_event(RootEvent::Workspace(WorkspaceEvent::Navigate(
+        NavigationSection::Sessions,
+    )));
+    assert_eq!(
+        core.view().history.filter.session,
+        Some(selected),
+        "opening Sessions applies its retained selection"
     );
 }
 

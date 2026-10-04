@@ -88,7 +88,7 @@ fn shell_checks_results_before_consuming_and_hides_internal_completions() {
         "client cannot serialize a completion"
     );
     assert!(
-        shell.process_event(&[6, 0, 0, 0, 9, 0, 0, 0]).is_err(),
+        shell.process_event(&[6, 0, 0, 0, 10, 0, 0, 0]).is_err(),
         "internal completion discriminant cannot be decoded"
     );
 }

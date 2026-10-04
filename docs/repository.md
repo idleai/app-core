@@ -25,7 +25,9 @@ reads. A valid saved choice initializes a reopened view once; later responses
 cannot overwrite a newer local choice. Partial or unavailable session lists keep
 the selection, while a complete replacement removes a session that is no longer
 present. Navigation to Activity clears the session filter; returning to Sessions
-restores the selected session. Projection source inspection opens unfiltered
+restores the selected session. A delayed read can restore the saved preference
+while Activity is open, but applies its history filter only in Sessions.
+Projection source inspection opens unfiltered
 Activity before selecting the exact source record.
 
 The standalone host uses `idle-repository` for Git/GitHub interpretation and native

@@ -17,6 +17,9 @@ pub struct ProjectionQuery {
     pub context: Context,
     /// Maximum engine candidates to read, from 1 to 1000; not a result total.
     pub limit: u32,
+    /// Revalidate upstream sources instead of reusing a recent read.
+    #[serde(default)]
+    pub refresh_sources: bool,
 }
 
 /// Typed Rust host output, validated before any rows are replaced.

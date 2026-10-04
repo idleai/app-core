@@ -298,7 +298,7 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             command
         };
         let projection_event = match &event {
-            history::Event::Refresh => Some(projections::Event::Refresh),
+            history::Event::Refresh => Some(projections::Event::Changed),
             history::Event::Reconnect => Some(projections::Event::Reconnect),
             history::Event::Suspend => Some(projections::Event::Suspend),
             history::Event::Disconnect => Some(projections::Event::Disconnect),
@@ -597,10 +597,16 @@ fn update_repository(event: repository::Event, model: &mut Model) -> Command<Eff
                 .map_event(Event::Repository);
         }
     }
+    let apply_history = !matches!(event, repository::Event::Completed { .. })
+        || !model.workspace.owns_history()
+        || model.workspace.section() == workspace::NavigationSection::Sessions;
     let mut command = repository::Repositories
         .update(event, &mut model.repository)
         .map_event(Event::Repository);
     let events = model.repository.take_history_events();
+    if !apply_history {
+        return command;
+    }
     if !events.is_empty()
         && let Some(context) = model.repository.context()
     {

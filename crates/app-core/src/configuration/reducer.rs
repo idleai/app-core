@@ -59,7 +59,7 @@ pub enum ConfigurationEvent {
     /// Retire all continuations and clear this context's data.
     Disconnect,
     /// Restore a host-retained draft after loading its current authorized document.
-    /// New edits in this client take precedence over a delayed restore response.
+    /// Preserve newer edits while recovering any original unresolved save.
     Restore(ConfigurationDraft),
     /// Internal continuation; serialized client events cannot forge saved values.
     #[serde(skip)]
@@ -166,7 +166,8 @@ fn restore(model: &mut Model, draft: ConfigurationDraft) -> ConfigurationCommand
         );
     }
     let editor = model.editor(draft.document);
-    if editor.dirty() || editor.pending.is_some() {
+    let keep_edits = editor.dirty();
+    if editor.pending.is_some() || (keep_edits && draft.pending.is_none()) {
         return Command::done();
     }
     if !editor.is_ready()
@@ -201,7 +202,9 @@ fn restore(model: &mut Model, draft: ConfigurationDraft) -> ConfigurationCommand
     }
     let editor = model.editor_mut(draft.document);
     editor.base = draft.base;
-    editor.draft = draft.value;
+    if !keep_edits {
+        editor.draft = draft.value;
+    }
     editor.save = if draft.pending.is_some() {
         ConfigurationSaveState::Uncertain(validation::error(
             ConfigurationErrorKind::Unavailable,

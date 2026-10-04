@@ -9,6 +9,54 @@ use crate::{
 };
 
 #[test]
+fn explicit_source_refresh_survives_coalesced_background_changes() {
+    for events in [
+        [Event::Refresh, Event::Changed],
+        [Event::Changed, Event::Refresh],
+    ] {
+        let core = Core::new();
+        let mut first = request(send(&core, Event::Connect(context())));
+        assert!(
+            !first.operation.refresh_sources,
+            "initial reads may share recent sources"
+        );
+        for event in events {
+            assert!(
+                send(&core, event)
+                    .iter()
+                    .all(|effect| !matches!(effect, Effect::Projection(_))),
+                "refreshes coalesce while a read is pending"
+            );
+        }
+        let mut manual = request(
+            core.resolve(&mut first, Ok(snapshot()))
+                .expect("first read"),
+        );
+        assert!(
+            manual.operation.refresh_sources,
+            "manual refresh takes priority"
+        );
+        let _effects = send(&core, Event::Changed);
+        let mut background = request(
+            core.resolve(&mut manual, Ok(snapshot()))
+                .expect("manual read"),
+        );
+        assert!(
+            !background.operation.refresh_sources,
+            "later automatic updates may reuse sources"
+        );
+        let _effects = core
+            .resolve(&mut background, Ok(snapshot()))
+            .expect("background read");
+        let manual = request(send(&core, Event::Refresh));
+        assert!(
+            manual.operation.refresh_sources,
+            "a direct manual refresh revalidates sources"
+        );
+    }
+}
+
+#[test]
 fn all_five_views_preserve_supplied_fields_and_filter_without_reclassifying() {
     let core = ready();
     let view = core.view().projections;

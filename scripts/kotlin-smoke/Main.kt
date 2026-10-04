@@ -170,7 +170,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 13u)
+    check(core.protocolVersion() == 14u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }
@@ -322,7 +322,7 @@ private fun sessionSmoke(mode: WorkspaceMode) = AppCore().use { client ->
 private fun projectionSmoke() = AppCore().use { client ->
     val context = Context("managed", "workspace", "alice", "chain")
     val load = send(client, Event.Projections(ProjectionEvent.Connect(context)))
-        .request(EffectFfi.Projection(ProjectionQuery(context, 100u)))
+        .request(EffectFfi.Projection(ProjectionQuery(context, 100u, false)))
     val source = ProjectionReference("ab".repeat(32), "cd".repeat(32), "ef".repeat(32))
     val row = ProjectionRow("stable-task", "Check 🌍", "Exact details\n", null, "provider/active", listOf("supplied"), listOf(source), emptyList())
     val freshness = ProjectionFreshness(FreshnessStatus.CURRENT, 1000uL, "opaque/checkpoint")
