@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/idleai/app-core/compare/app-core-v0.1.2...app-core-v0.1.3) - 2026-10-05
+
+### Other
+
+- *(deps)* bump boltffi from 0.29.3 to 0.31.0 ([#20](https://github.com/idleai/app-core/pull/20))
+
 ## [0.1.2](https://github.com/idleai/app-core/compare/app-core-v0.1.1...app-core-v0.1.2) - 2026-10-05
 
 ### Other
