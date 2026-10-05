@@ -21,7 +21,7 @@ jobs:
       run:
         working-directory: app-core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: app-core
           ref: ${{ inputs.revision || github.sha }}
@@ -36,7 +36,7 @@ jobs:
           workspaces: "app-core -> target"
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked --version 0.20.2
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -46,7 +46,7 @@ jobs:
           echo "1adb6f1a5845ba0aa5a59e412e44c8e405236b957de1a9683619f1dca3b16932  $RUNNER_TEMP/kotlin-compiler.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/kotlin-compiler.zip" -d "$RUNNER_TEMP/kotlin"
           echo "$RUNNER_TEMP/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
-      - uses: swift-actions/setup-swift@v2
+      - uses: swift-actions/setup-swift@v3
         with:
           swift-version: '6.2'
       - name: Install BoltFFI
@@ -60,7 +60,7 @@ jobs:
       run:
         working-directory: app-core
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: app-core
           ref: ${{ inputs.revision || github.sha }}
