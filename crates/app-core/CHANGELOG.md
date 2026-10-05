@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/idleai/app-core/compare/app-core-v0.1.4...app-core-v0.1.5) - 2026-10-05
+
+### Fixed
+
+- restore released dependencies consistently on Windows ([#28](https://github.com/idleai/app-core/pull/28))
+
 ## [0.1.4](https://github.com/idleai/app-core/compare/app-core-v0.1.3...app-core-v0.1.4) - 2026-10-05
 
 ### Other
