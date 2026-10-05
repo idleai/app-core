@@ -137,15 +137,16 @@ def restore(root):
 
 def update_cargo(root):
     # Preserve third-party selections unless an internal release needs a change.
-    subprocess.run(["cargo", "update", "--workspace"], cwd=root, check=True)
-    lock = tomllib.loads((root / "Cargo.lock").read_text())
+    path = root / "Cargo.lock"
+    lock = tomllib.loads(path.read_text()) if path.exists() else {"package": []}
     packages = [package for package in lock["package"]
                 if "raw.githubusercontent.com/idleai/" in package.get("source", "")]
-    if packages:
-        arguments = ["cargo", "update"]
-        for package in packages:
-            arguments += ["-p", f"{package['name']}@{package['version']}"]
-        subprocess.run(arguments, cwd=root, check=True)
+    # Manifest edits and internal upgrades must resolve together: an older locked
+    # internal package can conflict with a newly declared third-party requirement.
+    arguments = ["cargo", "update", "--workspace"]
+    for package in packages:
+        arguments += ["-p", f"{package['name']}@{package['version']}"]
+    subprocess.run(arguments, cwd=root, check=True)
 
 
 def resolve(root):
