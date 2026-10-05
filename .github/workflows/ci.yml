@@ -142,3 +142,30 @@ jobs:
       - name: Restore this build's dependency selection
         run: python3 scripts/release_dependencies.py restore
       - run: bash scripts/check-consumers.sh vscode-extension
+
+  windows_dependencies:
+    name: Restore shared dependencies on Windows
+    needs: dependencies
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: app-core
+    env:
+      IDLE_RELEASE_INPUTS: ${{ github.workspace }}/app-core/target/released-dependencies.json
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: app-core
+          ref: ${{ inputs.revision || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.dependencies.outputs.artifact_id }}
+          path: app-core/target
+      - name: Restore the Linux dependency record
+        run: python scripts/release_dependencies.py restore
+      - name: Check dependency selection and reuse
+        run: python -m unittest discover -s scripts -p test_release_dependencies.py
