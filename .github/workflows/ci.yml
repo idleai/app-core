@@ -46,6 +46,10 @@ jobs:
           echo "1adb6f1a5845ba0aa5a59e412e44c8e405236b957de1a9683619f1dca3b16932  $RUNNER_TEMP/kotlin-compiler.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/kotlin-compiler.zip" -d "$RUNNER_TEMP/kotlin"
           echo "$RUNNER_TEMP/kotlin/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: Import Swift signing keys
+        run: |
+          curl --fail --silent --show-error --location --compressed --retry 3 https://swift.org/keys/all-keys.asc --output "$RUNNER_TEMP/swift-signing-keys.asc"
+          gpg --batch --import "$RUNNER_TEMP/swift-signing-keys.asc"
       - uses: swift-actions/setup-swift@v3
         with:
           swift-version: '6.2'
