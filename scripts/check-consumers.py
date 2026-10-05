@@ -13,6 +13,8 @@ import tempfile
 import tomllib
 import urllib.request
 
+import release_dependencies
+
 
 def download(specification, destination):
     package = specification["package"]
@@ -40,7 +42,8 @@ def download(specification, destination):
 
 def main():
     root = Path(__file__).resolve().parent.parent
-    releases = json.loads((root / "consumer-dependencies.json").read_text())["dependencies"]
+    selection = release_dependencies.ensure(root)
+    releases = selection["artifacts"]["consumer-dependencies.json"]["dependencies"]
     for consumer in sys.argv[1:] or releases:
         with tempfile.TemporaryDirectory(prefix="idle-consumer-") as temporary:
             staging = Path(temporary)
