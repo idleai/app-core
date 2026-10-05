@@ -76,6 +76,7 @@ class BuildInputTests(unittest.TestCase):
         self.environment.start()
         self.addCleanup(self.environment.stop)
         os.environ.pop(dependencies.ENVIRONMENT, None)
+        os.environ.pop("IDLE_LOCAL_RELEASE_INPUTS", None)
         self.root = Path(self.temporary.name)
         self.git("init", "-q")
         self.git("config", "user.name", "Fixture")
@@ -145,6 +146,15 @@ class BuildInputTests(unittest.TestCase):
             dependencies.capture(self.root, artifacts)
             with self.assertRaises(ValueError):
                 dependencies.restore(self.root)
+
+    def test_local_native_bundle_is_usable_only_for_explicit_integration_checks(self):
+        selected = dict(self.selected, local_platform="linux-x64", sha256={"linux-x64": "a" * 64})
+        artifacts = {"native-dependencies.json": {"schema": 1, "dependencies": {"engine": selected}}}
+        dependencies.capture(self.root, artifacts)
+        with self.assertRaisesRegex(ValueError, "explicit integration"):
+            dependencies.restore(self.root)
+        with patch.dict(os.environ, {"IDLE_LOCAL_RELEASE_INPUTS": "1"}):
+            dependencies.restore(self.root)
 
     def test_lock_changes_after_resolution_fail_before_building(self):
         dependencies.capture(self.root, self.artifacts)

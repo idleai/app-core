@@ -119,7 +119,11 @@ def read(root):
                 raise ValueError("resolved artifact does not satisfy its version requirement")
             checksums = dependency["sha256"]
             if name.startswith("native-"):
-                if set(checksums) != set(PLATFORMS):
+                local_platform = dependency.get("local_platform")
+                if local_platform and (os.environ.get("IDLE_LOCAL_RELEASE_INPUTS") != "1" or local_platform not in PLATFORMS):
+                    raise ValueError("local native bundles require an explicit integration run")
+                expected_platforms = {local_platform} if local_platform else set(PLATFORMS)
+                if set(checksums) != expected_platforms:
                     raise ValueError("resolved native release is missing a platform")
                 checksums = checksums.values()
             else:
