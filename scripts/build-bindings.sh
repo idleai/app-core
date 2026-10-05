@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # Match the macro and CLI versions.
-test "$(boltffi --version)" = "boltffi 0.29.3"
+test "$(boltffi --version)" = "boltffi 0.31.0"
 
 # dist is entirely generated; do not leave obsolete bindings beside new ones.
 rm -rf dist
@@ -16,7 +16,7 @@ cargo run --locked -p app-core --features typegen --bin codegen -- dist/types
     boltffi --cargo-arg=--locked generate kotlin
 )
 
-# BoltFFI 0.29's generated bindings use its IR expansion ABI. This is the same
+# BoltFFI's generated bindings use its IR expansion ABI. This is the same
 # expansion that `boltffi pack apple` uses, built for the local smoke-test host.
 BOLTFFI_BINDING_EXPANSION=1 \
 BOLTFFI_BINDING_EXPANSION_ROOT="$PWD/crates/app-core-bindings" \

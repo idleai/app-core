@@ -31,7 +31,7 @@ For full checks, also install Swift 6.2+, a C compiler, JDK 21+ (`JAVA_HOME` set
 and Kotlin 2.2.0 (`kotlinc` on `PATH`), then run:
 
 ```sh
-cargo install boltffi_cli --locked --version 0.29.3
+cargo install boltffi_cli --locked --version 0.31.0
 ./scripts/check.sh
 ```
 

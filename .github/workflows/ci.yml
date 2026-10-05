@@ -54,7 +54,7 @@ jobs:
         with:
           swift-version: '6.2'
       - name: Install BoltFFI
-        run: cargo install boltffi_cli --locked --version 0.29.3
+        run: cargo install boltffi_cli --locked --version 0.31.0
       - run: bash scripts/check.sh
 
   consumers:
