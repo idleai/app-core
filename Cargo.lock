@@ -27,7 +27,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "app-core"
 version = "0.1.2"
 dependencies = [
- "bincode",
+ "bincode 3.0.0",
  "crux_core",
  "editchain-core",
  "editchain-engine",
@@ -71,6 +71,12 @@ checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "bincode"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6a120d2e16b3e1b4a24bd70f23b12d3e16b81f113364a26935f8db7245452d"
 
 [[package]]
 name = "bitflags"
@@ -297,7 +303,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488100da60c1b29000fb4de03b8da5318cfd51a9f15021823c034f97074276ba"
 dependencies = [
  "anyhow",
- "bincode",
+ "bincode 1.3.3",
  "crossbeam-channel",
  "facet",
  "futures",
