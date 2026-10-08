@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/idleai/app-core/compare/app-core-v0.1.5...app-core-v0.2.0) - 2026-10-08
+
+### Other
+
+- *(f43/activity-editor)* manage paged Activity timelines and editor selection ([#29](https://github.com/idleai/app-core/pull/29))
+
 ## [0.1.5](https://github.com/idleai/app-core/compare/app-core-v0.1.4...app-core-v0.1.5) - 2026-10-05
 
 ### Fixed
