@@ -5,6 +5,7 @@ mod engine_cases;
 #[cfg(not(target_arch = "wasm32"))]
 mod reconciliation_cases;
 mod state_cases;
+mod timeline_cases;
 mod wire_cases;
 
 use crux_core::Request;
