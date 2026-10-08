@@ -60,6 +60,8 @@ pub struct Selected {
     reason = "Facet generates unsafe reflection helpers; these fields have no safety invariants"
 )]
 pub struct ViewModel {
+    /// Indexed Activity editor and sidebar windows.
+    pub timeline: super::timeline::ViewModel,
     /// State of the atomic replacement read; cached data stays visible while loading.
     pub reconciliation: RequestState,
     /// Selected logical chain binding.

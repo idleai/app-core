@@ -61,6 +61,8 @@ pub enum HistoryEvent {
     Suspend,
     /// Read a fresh snapshot on a new connection, preserving interaction state.
     Reconnect,
+    /// Indexed Activity editor and sidebar actions.
+    Timeline(super::timeline::Event),
     /// Internal continuation. Serialized client events cannot forge results.
     #[serde(skip)]
     #[facet(skip)]
@@ -106,6 +108,7 @@ impl App for History {
 
     fn view(&self, model: &Model) -> ViewModel {
         ViewModel {
+            timeline: model.timeline.view(),
             chain: model.chain.clone(),
             filter: model.filter.clone(),
             selected: model.selected.clone(),
@@ -139,12 +142,16 @@ impl App for History {
 
 fn transition(event: Event, model: &mut Model) -> HistoryCommand {
     match event {
+        Event::Timeline(event) => {
+            super::timeline::update(event, &mut model.timeline).map_event(Event::Timeline)
+        }
         Event::Connect(chain) => {
             if model.chain.as_ref() == Some(&chain) {
                 return Command::done();
             }
             reset(model);
             model.chain = Some(chain);
+            model.timeline.bind(model.chain.clone());
             load_history(model)
         }
         Event::Disconnect => {
@@ -190,14 +197,16 @@ fn transition(event: Event, model: &mut Model) -> HistoryCommand {
         Event::LoadOperationDetails { operation, refresh } => {
             load_operation_details(model, operation, refresh)
         }
-        Event::Refresh => refresh(model),
+        Event::Refresh => refresh(model).and(refresh_timeline(model)),
         Event::Suspend => {
             suspend(model);
-            render::render()
+            super::timeline::update(super::timeline::Event::Suspend, &mut model.timeline)
+                .map_event(Event::Timeline)
+                .and(render::render())
         }
         Event::Reconnect => {
             suspend(model);
-            refresh(model)
+            refresh(model).and(refresh_timeline(model))
         }
         Event::Open { record, target } => {
             if model.chain.is_none() {
@@ -222,13 +231,25 @@ fn transition(event: Event, model: &mut Model) -> HistoryCommand {
 
 fn reset(model: &mut Model) {
     // Never reuse a token from a detached context, even when switching A -> B -> A.
+    model.timeline.bind(None);
     *model = Model {
+        timeline: std::mem::take(&mut model.timeline),
         pending: {
             model.pending.clear();
             std::mem::take(&mut model.pending)
         },
         ..Model::default()
     };
+}
+
+fn refresh_timeline(model: &mut Model) -> HistoryCommand {
+    use super::timeline::{Event as TimelineEvent, Surface};
+    super::timeline::update(TimelineEvent::Refresh(Surface::Editor), &mut model.timeline)
+        .map_event(Event::Timeline)
+        .and(
+            super::timeline::update(TimelineEvent::Refresh(Surface::Mini), &mut model.timeline)
+                .map_event(Event::Timeline),
+        )
 }
 
 fn request(model: &mut Model, action: QueryAction) -> HistoryCommand {
@@ -538,6 +559,9 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
         QueryAction::Search { .. }
         | QueryAction::OperationDetails { .. }
         | QueryAction::Open { .. }
+        | QueryAction::OpenAt { .. }
+        | QueryAction::Commit { .. }
+        | QueryAction::Timeline(_)
         | QueryAction::Reconcile(_) => {
             return Err(cache::error("Wrong history response type"));
         }
@@ -568,6 +592,9 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
             QueryAction::Search { .. }
             | QueryAction::OperationDetails { .. }
             | QueryAction::Open { .. }
+            | QueryAction::OpenAt { .. }
+            | QueryAction::Commit { .. }
+            | QueryAction::Timeline(_)
             | QueryAction::Reconcile(_) => false,
         };
         if !matches {
@@ -597,6 +624,9 @@ pub(super) fn apply(
                 QueryAction::Search { .. }
                 | QueryAction::OperationDetails { .. }
                 | QueryAction::Open { .. }
+                | QueryAction::OpenAt { .. }
+                | QueryAction::Commit { .. }
+                | QueryAction::Timeline(_)
                 | QueryAction::Reconcile(_) => return Err(cache::error("Wrong history request")),
             };
             settle(paging, result.scanned, result.next_after);
@@ -746,8 +776,12 @@ fn fail(model: &mut Model, action: &QueryAction, error: EffectError) {
                 .operation_details
                 .insert(operation.clone(), OperationDetailsState::Failed(error));
         }
-        QueryAction::Open { .. } => model.open = RequestState::Failed(error),
-        QueryAction::Reconcile(_) => model.reconciliation = RequestState::Failed(error),
+        QueryAction::Open { .. } | QueryAction::OpenAt { .. } | QueryAction::Commit { .. } => {
+            model.open = RequestState::Failed(error);
+        }
+        QueryAction::Timeline(_) | QueryAction::Reconcile(_) => {
+            model.reconciliation = RequestState::Failed(error);
+        }
     }
 }
 

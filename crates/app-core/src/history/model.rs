@@ -25,14 +25,17 @@ pub struct Model {
     pub(super) pending: idle_history::requests::RequestTracker<QueryAction>,
     pub(super) reconciliation: RequestState,
     pub(super) reconcile_again: bool,
+    pub(super) timeline: super::timeline::Model,
 }
 
 impl Model {
     pub(crate) fn bind(&mut self, chain: Option<String>) {
         self.pending.clear();
+        self.timeline.bind(chain.clone());
         *self = Self {
             chain,
             pending: std::mem::take(&mut self.pending),
+            timeline: std::mem::take(&mut self.timeline),
             ..Self::default()
         };
     }

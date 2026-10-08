@@ -5,6 +5,44 @@ client. Effects carry a logical chain binding and a typed `history::QueryAction`
 The host resolves that binding, executes the query and resolves the request. The
 reducer does no filesystem, transport, DOM, scrolling or graph-layout work.
 
+## Indexed Activity
+
+The full editor and compact sidebar use `history::Event::Timeline`. Their native
+contract is version 2 in `idle-history::timeline`; the host advertises this
+capability before either composition requests a window. The raw history queries
+below remain available for operation details and other existing consumers.
+
+The reducer owns shared exact selection, separate editor/sidebar filters and
+windows, disclosure choices, Find, request cancellation and refresh. The editor
+requests 200 rows and the mini requests 40. Native requests allow at most 500 rows;
+the combined retained timeline data is capped at 2,000 rows and 32 MiB. Complete
+documents stay behind native file, diff, Original and operation-JSON requests.
+
+Rows carry occurrence identities independently of logical items, full record
+digests and current/retained source addresses. Selecting a row with `open: true`
+requests its declared native action. `Reveal` transfers an exact selection from
+the mini to the editor, seeks its occurrence, and verifies the returned address.
+`Move` changes selection without opening content, including across page boundaries.
+Superseded open responses cannot replace the latest selection.
+
+Manual disclosure overrides survive refresh. Live groups begin expanded and
+completed groups begin folded; completion preserves groups reported as visible.
+Find temporarily expands matching groups and restores manual choices when
+cleared. Filter, Find and page responses are accepted only for their pending
+request and declared snapshot. Failed fetches retain the readable window.
+
+Finishing a subscription binding retires earlier reads. Compositions that
+already requested the same chain remain registered for the refresh after joining,
+so a sidebar mounted during startup receives its replacement window. Rows and
+selection from the earlier binding are cleared before accepting fresh results.
+
+Web-ui reports semantic anchors and whether the viewport is at the newest row.
+Refresh follows new work only at that position; otherwise it preserves the
+anchor and exposes a new-activity indicator. App-core forwards native lane and
+relationship data without deriving topology or pixel coordinates.
+
+## Raw records and content
+
 ```rust,no_run
 use app_core::{Core, Effect, Event, history};
 use editchain_engine::queries::ChainQueries;

@@ -9,6 +9,8 @@ mod cache;
 mod model;
 mod reconciliation;
 mod reducer;
+/// Indexed Activity state and exact native activation.
+pub mod timeline;
 mod types;
 mod views;
 

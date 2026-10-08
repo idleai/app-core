@@ -385,7 +385,7 @@ fn protocol_v4_binary_layout_matches_the_public_types() {
     }
 
     assert_eq!(
-        PROTOCOL_VERSION, 14,
+        PROTOCOL_VERSION, 15,
         "workspace navigation extends the binary shell protocol"
     );
     assert_eq!(encode(&Event::Start), START, "stable Start discriminant");

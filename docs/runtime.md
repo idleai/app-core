@@ -27,7 +27,7 @@ types and bincode codecs.
 
 | Rust method (camelCase in generated bindings) | Payloads |
 | --- | --- |
-| `protocol_version()` | Returns `14`; includes history, workspace, subscription, session, projection, resource, configuration and repository payloads. |
+| `protocol_version()` | Returns `15`; includes history, workspace, subscription, session, projection, resource, configuration and repository payloads. |
 | `process_event(event)` | Encoded `Event` → encoded `EffectBatch`. |
 | `handle_response(id, result)` | Encoded `HostInfoResponse`, `QueryResponse`, `WorkspaceResponse`, `SubscriptionResponse`, `SessionResponse`, `ProjectionResponse`, `ResourceResponse` or `ConfigurationResponse` → encoded `EffectBatch`. |
 | `view()` | Encoded `ViewModel`. |
@@ -36,6 +36,11 @@ Use the generated codecs to encode and decode these bytes. Process every returne
 batch, including follow-up effects. A `Render` effect asks for a fresh view and
 needs no response. Return each other effect's result and request ID to the same
 `AppCore` instance. Unknown, completed and render-only IDs are rejected.
+
+Protocol 15 adds the indexed Activity view, exact current/retained selection,
+window cursors, Find and independent editor/sidebar state. Regenerate Swift and
+Kotlin types together with the native library. Earlier event and open-target
+variant positions remain stable; the expanded view model requires the new version.
 Malformed results can be corrected and retried; a valid `Err` result becomes
 failure state in the view.
 

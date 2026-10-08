@@ -170,7 +170,7 @@ private fun rejected(action: () -> Unit) {
 private fun exercise(core: AppCore, other: AppCore) {
     val idle = view(core)
     check(!idle.initialized && idle.bootstrap == LoadState.Idle && idle.history.chain == null)
-    check(core.protocolVersion() == 14u)
+    check(core.protocolVersion() == 15u)
     check(view(core) == idle)
     rejected { core.processEvent(byteArrayOf()) }
     rejected { core.processEvent("invalid".encodeToByteArray()) }

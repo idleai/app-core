@@ -57,7 +57,7 @@ fn history_round_trips_through_shell_and_generated_response_contract() {
         "foreign host updates shared history state"
     );
     assert_eq!(
-        PROTOCOL_VERSION, 14,
+        PROTOCOL_VERSION, 15,
         "clients regenerate their payload bindings"
     );
     assert!(
@@ -82,8 +82,8 @@ fn client_cannot_serialize_an_internal_history_completion() {
 #[test]
 fn operation_detail_names_preserve_protocol_v4_binary_layout() {
     assert_eq!(
-        PROTOCOL_VERSION, 14,
-        "name changes preserve the shell wire version"
+        PROTOCOL_VERSION, 15,
+        "the timeline view requires regenerated host bindings"
     );
     let event = Event::History(history::Event::LoadOperationDetails {
         operation: "op".into(),

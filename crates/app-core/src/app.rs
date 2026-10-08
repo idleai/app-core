@@ -266,6 +266,7 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             | history::Event::LoadItem(_)
             | history::Event::LoadOperationDetails { .. }
             | history::Event::Open { .. }
+            | history::Event::Timeline(_)
             | history::Event::Completed { .. } => None,
         };
         let command = if let Some(event) = repository_event {
@@ -290,6 +291,7 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             | history::Event::LoadItem(_)
             | history::Event::LoadOperationDetails { .. }
             | history::Event::Open { .. }
+            | history::Event::Timeline(_)
             | history::Event::Completed { .. } => None,
         };
         let command = if let Some(event) = configuration_event {
@@ -314,6 +316,7 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             | history::Event::LoadItem(_)
             | history::Event::LoadOperationDetails { .. }
             | history::Event::Open { .. }
+            | history::Event::Timeline(_)
             | history::Event::Completed { .. } => None,
         };
         let resource_event = match &event {
@@ -333,6 +336,7 @@ fn update_subscription(event: subscriptions::Event, model: &mut Model) -> Comman
             | history::Event::LoadItem(_)
             | history::Event::LoadOperationDetails { .. }
             | history::Event::Open { .. }
+            | history::Event::Timeline(_)
             | history::Event::Completed { .. } => None,
         };
         let command = if let Some(event) = resource_event {

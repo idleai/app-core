@@ -50,7 +50,7 @@ See [consumer compatibility](docs/packaging.md#consumer-compatibility) for
 archive selection and checking a local consumer checkout.
 
 Generate host bindings alone with `bash scripts/build-bindings.sh`; outputs go
-under ignored `dist/`. Shell protocol **14** requires matching native bindings and
+under ignored `dist/`. Shell protocol **15** requires matching native bindings and
 payload codecs. Rust and Dioxus/WASM clients depend directly on `app-core`.
 
 Integration guides:
@@ -69,7 +69,7 @@ Contributor rules are in [AGENTS.md](AGENTS.md); dependency policy and its docum
 exceptions are in [deny.toml](deny.toml).
 
 See [repository integration](docs/repository.md) for Git/GitHub reads, recorded
-session selection and the shell protocol 14 boundary.
+session selection and the shell protocol 15 boundary.
 
 ## Package releases
 
