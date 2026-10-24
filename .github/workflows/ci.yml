@@ -132,9 +132,13 @@ jobs:
           done
       - uses: swift-actions/setup-swift@v3
         with:
-          swift-version: '6.2'
+          swift-version: '6.2.4'
       - name: Install BoltFFI
-        run: cargo install boltffi_cli --locked --version 0.31.0
+        run: |
+          if [[ "$(boltffi --version 2>/dev/null || true)" != 'boltffi 0.31.0' ]]; then
+            cargo install boltffi_cli --locked --version 0.31.0 --force
+          fi
+          test "$(boltffi --version)" = 'boltffi 0.31.0'
       - run: bash scripts/check.sh
 
   consumers:
