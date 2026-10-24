@@ -106,9 +106,15 @@ jobs:
         run: |
           curl --fail --silent --show-error --location --compressed --retry 3 https://swift.org/keys/all-keys.asc --output "$RUNNER_TEMP/swift-signing-keys.asc"
           gpg --batch --import "$RUNNER_TEMP/swift-signing-keys.asc"
-      - name: Repair incomplete Swiftly download cache
+      - name: Prepare persistent Swift installation
         if: ${{ runner.environment == 'self-hosted' }}
         run: |
+          swift_home="$RUNNER_TOOL_CACHE/swiftly-home"
+          swift_bin="$RUNNER_TOOL_CACHE/swiftly-bin"
+          mkdir -p "$swift_home" "$swift_bin"
+          echo "SWIFTLY_HOME_DIR=$swift_home" >> "$GITHUB_ENV"
+          echo "SWIFTLY_BIN_DIR=$swift_bin" >> "$GITHUB_ENV"
+          echo "$swift_bin" >> "$GITHUB_PATH"
           for marker in "$RUNNER_TOOL_CACHE"/swiftly/*/*.complete; do
             [[ -f "$marker" ]] || continue
             if [[ ! -x "${marker%.complete}/swiftly" ]]; then
