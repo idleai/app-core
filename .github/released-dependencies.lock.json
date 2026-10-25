@@ -1,0 +1,17 @@
+{
+  "artifacts": {
+    "consumer-dependencies.json": {
+      "dependencies": {
+        "vscode-extension": {
+          "package": "idle-vscode-webview",
+          "repository": "idleai/vscode-extension",
+          "sha256": "9f8842f90d5e297233c0d6e09961983ad71526d32608942af78a2981fa544011",
+          "tag": "idle-vscode-webview-v0.1.4",
+          "version": "^0.1.0"
+        }
+      },
+      "schema": 1
+    }
+  },
+  "schema": 1
+}
