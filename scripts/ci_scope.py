@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BROWSERS = ("history", "history-details", "history-explorer", "sessions", "projections", "navigation")
 
 
-def select(paths, *, full=False, root=ROOT):
+def select(paths, *, full=False, quick=False, root=ROOT):
     common = full or any(
         path in {"Cargo.lock", "rust-toolchain.toml", ".github/released-dependencies.lock.json",
                  "scripts/ci_scope.py", "scripts/check.sh", "scripts/lint.sh",
@@ -56,6 +56,10 @@ def select(paths, *, full=False, root=ROOT):
                 browsers.add(suite)
     if common:
         browsers.update(BROWSERS)
+    if quick and not full:
+        # Cross-language bindings and consumer integration run after merge.
+        native = False
+        consumers = False
     return {"windows_dependencies": windows, "native_bindings": native,
             "consumers": consumers, "browser": [suite for suite in BROWSERS if suite in browsers]}
 
@@ -69,7 +73,7 @@ def main():
             ["git", "diff", "--name-only", "--no-renames", "-z", base,
              os.environ.get("HEAD_SHA", "HEAD")], cwd=ROOT)
         paths = [os.fsdecode(path) for path in output.split(b"\0") if path]
-    plan = select(paths, full=full)
+    plan = select(paths, full=full, quick=os.environ.get("PR_CI") == "true")
     print(json.dumps(plan))
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         for key, value in plan.items():

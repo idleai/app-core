@@ -54,6 +54,15 @@ class ScopeTests(unittest.TestCase):
     def test_release_and_integration_runs_are_full(self):
         self.assertEqual(select([], full=True)["browser"], list(BROWSERS))
 
+    def test_pr_defers_bindings_and_consumer_checks_until_full_validation(self):
+        paths = ["crates/app-core/src/history/model.rs"]
+        quick = select(paths, quick=True)
+        self.assertFalse(quick["native_bindings"])
+        self.assertFalse(quick["consumers"])
+        complete = select(paths, quick=True, full=True)
+        self.assertTrue(complete["native_bindings"])
+        self.assertTrue(complete["consumers"])
+
 
 if __name__ == "__main__":
     unittest.main()
