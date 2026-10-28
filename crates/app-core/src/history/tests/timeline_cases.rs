@@ -42,6 +42,8 @@ fn row(value: u64) -> Row {
         timestamp: Some(value),
         open: OpenTarget::OperationJson,
         unavailable: None,
+        presentation: idle_history::timeline::Presentation::default(),
+        details: None,
         group: None,
         relationships: Vec::new(),
         graph: Geometry::default(),
@@ -365,7 +367,7 @@ fn grouped(state: (bool, bool)) -> Window {
 }
 
 #[test]
-fn completion_preserves_a_visible_group_and_find_temporarily_opens_a_manual_fold() {
+fn completion_preserves_a_visible_group_and_find_exposes_only_the_matching_member() {
     let (core, mut initial) = setup();
     assert!(reply(&core, &mut initial, Response::Window(grouped((true, true)))).is_empty());
     let _requests = emit(
@@ -433,20 +435,24 @@ fn completion_preserves_a_visible_group_and_find_temporarily_opens_a_manual_fold
         }),
     ));
     assert!(
-        matches!(&seek.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { position: Position::Seek(_), view, .. } if view.disclosures.iter().any(|choice| choice.group == "task-a" && choice.expanded))),
-        "Find must override the manual fold temporarily"
+        matches!(&seek.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { position: Position::Seek(_), view, .. } if view.disclosures.iter().any(|choice| choice.group == "task-a" && !choice.expanded) && view.exposed == vec![row(1).occurrence])),
+        "Find reveals the physical member while retaining the manual task fold"
     );
-    assert!(reply(&core, &mut seek, Response::Window(grouped((false, true)))).is_empty());
-    let restored = first(emit(
+    assert!(reply(&core, &mut seek, Response::Window(grouped((false, false)))).is_empty());
+    let cleared = emit(
         &core,
         TimelineEvent::Find {
             surface: Surface::Editor,
             text: String::new(),
         },
-    ));
+    );
     assert!(
-        matches!(&restored.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { view, .. } if view.disclosures.iter().any(|choice| choice.group == "task-a" && !choice.expanded))),
-        "closing Find restores the manual choice"
+        cleared.is_empty(),
+        "clearing Find retains the currently displayed rows without a native fold request"
+    );
+    assert!(
+        core.view().history.timeline.selected.is_none(),
+        "clearing Find clears selection"
     );
 }
 
@@ -539,5 +545,160 @@ fn switching_workspaces_and_out_of_order_windows_cannot_restore_old_rows() {
     assert!(
         core.view().history.timeline.editor.window.is_none(),
         "A to B to A retires pending request identities"
+    );
+}
+
+#[test]
+fn plain_click_selects_and_inspection_opens_the_same_exact_record() {
+    let (core, mut initial) = setup();
+    assert!(reply(&core, &mut initial, Response::Window(window(0, 3))).is_empty());
+    let selected = row(1);
+    assert!(
+        emit(
+            &core,
+            TimelineEvent::Click {
+                surface: Surface::Editor,
+                occurrence: selected.occurrence.clone()
+            }
+        )
+        .is_empty()
+    );
+    let view = core.view().history.timeline;
+    assert_eq!(
+        view.selected.expect("clicked selection").address,
+        selected.address
+    );
+    assert_eq!(
+        view.open,
+        RequestState::Idle,
+        "ordinary clicks never open a document"
+    );
+    let inspect = first(emit(
+        &core,
+        TimelineEvent::Inspect {
+            surface: Surface::Editor,
+            occurrence: selected.occurrence,
+        },
+    ));
+    assert!(
+        matches!(inspect.operation.action, QueryAction::OpenAt { address, target: OpenTarget::OperationJson } if address == selected.address),
+        "inspection uses the exact selected record"
+    );
+    assert!(
+        emit(
+            &core,
+            TimelineEvent::Inspect {
+                surface: Surface::Editor,
+                occurrence: "missing".into()
+            }
+        )
+        .is_empty(),
+        "a stale row cannot open the previous selection"
+    );
+}
+
+#[test]
+fn rapid_task_toggles_preserve_every_intent_and_clear_a_hidden_child_selection() {
+    let (core, mut initial) = setup();
+    assert!(
+        reply(
+            &core,
+            &mut initial,
+            Response::Window(grouped((false, true)))
+        )
+        .is_empty()
+    );
+    assert!(
+        emit(
+            &core,
+            TimelineEvent::Click {
+                surface: Surface::Editor,
+                occurrence: row(0).occurrence
+            }
+        )
+        .is_empty(),
+        "an expanded task body does not fold the task"
+    );
+    assert!(
+        emit(
+            &core,
+            TimelineEvent::Select {
+                surface: Surface::Editor,
+                occurrence: row(1).occurrence,
+                open: false
+            }
+        )
+        .is_empty()
+    );
+    let toggle = || TimelineEvent::Toggle {
+        surface: Surface::Editor,
+        group: "task-a".into(),
+    };
+    let mut close = first(emit(&core, toggle()));
+    let mut reopen = first(emit(&core, toggle()));
+    let mut close_again = first(emit(&core, toggle()));
+    for (request, expected) in [(&close, false), (&reopen, true), (&close_again, false)] {
+        assert!(
+            matches!(&request.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { view, .. } if view.disclosures.iter().any(|choice| choice.group == "task-a" && choice.expanded == expected))),
+            "each click reverses the pending choice"
+        );
+    }
+    assert_eq!(
+        core.view().history.timeline.editor.pending_disclosures,
+        vec!["task-a"]
+    );
+    assert!(
+        reply(&core, &mut reopen, Response::Window(grouped((false, true)))).is_empty(),
+        "superseded open does not replace current rows"
+    );
+    assert!(
+        reply(&core, &mut close, Response::Window(grouped((false, false)))).is_empty(),
+        "superseded close does not replace current rows"
+    );
+    let mut folded = grouped((false, false));
+    folded.rows.truncate(1);
+    assert!(reply(&core, &mut close_again, Response::Window(folded)).is_empty());
+    let view = core.view().history.timeline;
+    assert!(
+        view.selected.is_none(),
+        "folding a selected child does not select the anchor"
+    );
+    assert!(
+        view.editor.pending_disclosures.is_empty(),
+        "the authoritative result settles the control"
+    );
+    assert_eq!(
+        view.open,
+        RequestState::Idle,
+        "task controls never open documents"
+    );
+}
+
+#[test]
+fn item_detail_disclosure_is_independent_from_task_disclosure() {
+    let (core, mut initial) = setup();
+    let mut rows = grouped((false, true));
+    rows.rows.first_mut().unwrap().details = Some(idle_history::timeline::Details {
+        count: Some(2),
+        expanded: false,
+    });
+    assert!(reply(&core, &mut initial, Response::Window(rows)).is_empty());
+    let detail = || TimelineEvent::Details {
+        surface: Surface::Editor,
+        occurrence: row(0).occurrence,
+    };
+    let open = first(emit(&core, detail()));
+    assert!(
+        matches!(&open.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { view, .. } if view.disclosures.is_empty() && view.details == vec![row(0).occurrence])),
+        "details do not change the containing task"
+    );
+    let close = first(emit(&core, detail()));
+    assert!(
+        matches!(&close.operation.action, QueryAction::Timeline(request) if matches!(&request.action, Action::Window { view, .. } if view.details.is_empty())),
+        "a second pending detail click closes it"
+    );
+    assert!(
+        core.view().history.timeline.selected.is_none(),
+        "keyboard disclosure does not select the row"
     );
 }

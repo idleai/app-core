@@ -561,6 +561,7 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
         | QueryAction::Open { .. }
         | QueryAction::OpenAt { .. }
         | QueryAction::Commit { .. }
+        | QueryAction::CommitFile { .. }
         | QueryAction::Timeline(_)
         | QueryAction::Reconcile(_) => {
             return Err(cache::error("Wrong history response type"));
@@ -594,6 +595,7 @@ fn validate_history(action: &QueryAction, result: &HistoryPage) -> Result<(), Ef
             | QueryAction::Open { .. }
             | QueryAction::OpenAt { .. }
             | QueryAction::Commit { .. }
+            | QueryAction::CommitFile { .. }
             | QueryAction::Timeline(_)
             | QueryAction::Reconcile(_) => false,
         };
@@ -626,6 +628,7 @@ pub(super) fn apply(
                 | QueryAction::Open { .. }
                 | QueryAction::OpenAt { .. }
                 | QueryAction::Commit { .. }
+                | QueryAction::CommitFile { .. }
                 | QueryAction::Timeline(_)
                 | QueryAction::Reconcile(_) => return Err(cache::error("Wrong history request")),
             };
@@ -776,7 +779,10 @@ fn fail(model: &mut Model, action: &QueryAction, error: EffectError) {
                 .operation_details
                 .insert(operation.clone(), OperationDetailsState::Failed(error));
         }
-        QueryAction::Open { .. } | QueryAction::OpenAt { .. } | QueryAction::Commit { .. } => {
+        QueryAction::Open { .. }
+        | QueryAction::OpenAt { .. }
+        | QueryAction::Commit { .. }
+        | QueryAction::CommitFile { .. } => {
             model.open = RequestState::Failed(error);
         }
         QueryAction::Timeline(_) | QueryAction::Reconcile(_) => {
