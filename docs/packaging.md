@@ -10,9 +10,9 @@ and native host packaging are covered by the [runtime guide](runtime.md).
 ## Dependency selection
 
 Checks and builds need only this repository's source. The canonical
-`scripts/lint.sh` and `scripts/check.sh` select the latest compatible internal
-Cargo releases at the start. The committed `Cargo.lock` supplies the initial
-third-party selection. The
+`scripts/lint.sh` and `scripts/check.sh` select the latest internal Cargo
+releases within the declared major version at the start. The committed
+`Cargo.lock` supplies the initial third-party selection. The
 [consumer manifest](../consumer-dependencies.json) selects a compatible released
 extension source archive for the API compatibility check.
 
@@ -30,8 +30,12 @@ python3 scripts/release_dependencies.py run -- cargo build --workspace --locked
 ```
 
 `--locked` keeps later commands within that build on the resolved selection.
-Keep consumer minimum versions accurate when adopting a new API: `^0.1.2`
-accepts `0.1.3`; adopting `0.2.0` requires a manifest change.
+Internal dependencies use explicit ranges such as `>=0.5.1, <1.0.0`. Fresh builds
+can adopt `0.6.0` and later `0.x` releases automatically; `1.0.0` requires a
+manual major-version change. Keep the lower bound accurate when code needs a
+new API. Apply the same bounds to Cargo packages and release artifacts.
+Workspace path dependencies continue to use their local source, and third-party
+requirements retain their existing policy.
 
 The [Check latest released dependencies workflow](../.github/workflows/update-releases.yml)
 checks every six hours, or on manual request, and starts main CI when inputs
@@ -58,7 +62,7 @@ The [Release workflow](../.github/workflows/release.yml) starts after successful
 
 1. Release-plz calculates versions and changelogs from commit messages and Rust
    API checks, then commits the release metadata to `main`.
-2. The full CI workflow checks that version commit.
+2. The Linux CI workflow checks that version commit.
 3. Crate archives and Cargo index entries publish from that verified commit
    using its tested dependency selection.
 
@@ -71,6 +75,30 @@ Use **Re-run failed jobs** on the original Release run to finish a failed
 publication with its verified commit, even if `main` has advanced. Dispatch
 **Release** on `main` to prepare current changes or resume its version commit.
 Retries can finish draft releases; published versions and archives are immutable.
+
+## CI platforms and manual builds
+
+Automatic pull-request, main, scheduled, and release runs select Linux only.
+Trusted PR jobs use the local PR pool; other Linux release work uses
+`IDLE_BACKGROUND_RUNNER` (default `idle-background-linux-x64`). Fork PRs use
+GitHub-hosted Ubuntu. Windows dependency checks run only from the manual entrypoint.
+
+Run [Full platform CI](../.github/workflows/full-platform.yml) from Actions with an
+existing release tag, or use:
+
+```sh
+gh workflow run full-platform.yml --repo idleai/app-core --ref main -f tag=EXISTING_RELEASE_TAG
+```
+
+The run checks out that tag and reuses its recorded dependency versions. It does
+not prepare a new version commit. Native dependency tags must already have the
+required platform bundles: run their manual workflows first, starting with
+`editchain`, then `host-tools`, then consumers. The workflow reports any missing
+pinned dependency instead of choosing a different version.
+
+The manual run builds and tests the Rust workspace on Linux x64, macOS x64/arm64,
+and Windows x64, and compiles the WASM target on each host. Published `.crate`
+archives are source packages shared by these platforms.
 
 ## Unpublished integration
 
