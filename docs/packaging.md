@@ -58,7 +58,7 @@ The [Release workflow](../.github/workflows/release.yml) starts after successful
 
 1. Release-plz calculates versions and changelogs from commit messages and Rust
    API checks, then commits the release metadata to `main`.
-2. The full CI workflow checks that version commit.
+2. The Linux CI workflow checks that version commit.
 3. Crate archives and Cargo index entries publish from that verified commit
    using its tested dependency selection.
 
@@ -71,6 +71,30 @@ Use **Re-run failed jobs** on the original Release run to finish a failed
 publication with its verified commit, even if `main` has advanced. Dispatch
 **Release** on `main` to prepare current changes or resume its version commit.
 Retries can finish draft releases; published versions and archives are immutable.
+
+## CI platforms and manual builds
+
+Automatic pull-request, main, scheduled, and release runs select Linux only.
+Trusted PR jobs use the local PR pool; other Linux release work uses
+`IDLE_BACKGROUND_RUNNER` (default `idle-background-linux-x64`). Fork PRs use
+GitHub-hosted Ubuntu. Windows dependency checks run only from the manual entrypoint.
+
+Run [Full platform CI](../.github/workflows/full-platform.yml) from Actions with an
+existing release tag, or use:
+
+```sh
+gh workflow run full-platform.yml --repo idleai/app-core --ref main -f tag=EXISTING_RELEASE_TAG
+```
+
+The run checks out that tag and reuses its recorded dependency versions. It does
+not prepare a new version commit. Native dependency tags must already have the
+required platform bundles: run their manual workflows first, starting with
+`editchain`, then `host-tools`, then consumers. The workflow reports any missing
+pinned dependency instead of choosing a different version.
+
+The manual run builds and tests the Rust workspace on Linux x64, macOS x64/arm64,
+and Windows x64, and compiles the WASM target on each host. Published `.crate`
+archives are source packages shared by these platforms.
 
 ## Unpublished integration
 
