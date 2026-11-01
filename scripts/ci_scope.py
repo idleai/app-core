@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BROWSERS = ("history", "history-details", "history-explorer", "sessions", "projections", "navigation")
 
 
-def select(paths, *, full=False, quick=False, root=ROOT):
+def select(paths, *, full=False, quick=False, check_consumers=False, root=ROOT):
     common = full or any(
         path in {"Cargo.lock", "rust-toolchain.toml", ".github/released-dependencies.lock.json",
                  "scripts/ci_scope.py", "scripts/check.sh", "scripts/lint.sh",
@@ -32,11 +32,11 @@ def select(paths, *, full=False, quick=False, root=ROOT):
                     "crates/app-core/src/bin/codegen.rs", "scripts/ci_scope.py"}
         for path in paths
     )
-    consumers = common or any(
+    consumers = check_consumers and (common or any(
         path.startswith("crates/app-core/")
         or path in {"scripts/check-consumers.py", "scripts/check-consumers.sh", "consumer-dependencies.json"}
         for path in paths
-    )
+    ))
     browsers = set()
     for path in paths:
         if (path.startswith(("crates/web-ui/src/", "crates/history-geometry/"))
@@ -57,7 +57,7 @@ def select(paths, *, full=False, quick=False, root=ROOT):
     if common:
         browsers.update(BROWSERS)
     if quick and not full:
-        # Cross-language bindings and consumer integration run after merge.
+        # PRs defer binding checks; requested consumer checks need a full run.
         native = False
         consumers = False
     return {"windows_dependencies": windows, "native_bindings": native,
@@ -73,7 +73,8 @@ def main():
             ["git", "diff", "--name-only", "--no-renames", "-z", base,
              os.environ.get("HEAD_SHA", "HEAD")], cwd=ROOT)
         paths = [os.fsdecode(path) for path in output.split(b"\0") if path]
-    plan = select(paths, full=full, quick=os.environ.get("PR_CI") == "true")
+    plan = select(paths, full=full, quick=os.environ.get("PR_CI") == "true",
+                  check_consumers=os.environ.get("CHECK_RELEASED_CONSUMERS") == "true")
     print(json.dumps(plan))
     with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
         for key, value in plan.items():

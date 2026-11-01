@@ -46,6 +46,23 @@ commit, allowing dependency changes to produce new packages.
 
 ## Consumer compatibility
 
+Automatic CI and releases validate app-core's own Rust, WASM and native binding
+contracts. Testing an already released downstream extension is an explicit
+manual check: its immutable dependency requirements may predate a new app-core
+API and must not create a producer/consumer release cycle. Consumer integration
+and final product checks belong to the leaf application repositories.
+
+To include the released-extension check in a CI run, select **check_consumers**
+in Actions or run:
+
+```sh
+gh workflow run ci.yml --repo idleai/app-core --ref main -f check_consumers=true
+```
+
+The compatibility job is required when requested; a failure fails that manual
+run. Its checksum verification, native/WASM checks and effect-dispatch tests are
+unchanged.
+
 Run `bash scripts/check-consumers.sh` to test the candidate app-core against the
 latest complete compatible extension archive. The check verifies its checksum,
 applies app-core through a temporary Cargo override, checks native and WASM
@@ -61,20 +78,25 @@ The [Release workflow](../.github/workflows/release.yml) starts after successful
 `main` CI:
 
 1. Release-plz calculates versions and changelogs from commit messages and Rust
-   API checks, then commits the release metadata to `main`.
-2. The Linux CI workflow checks that version commit.
+   API checks, then stages the release metadata on `ci/release/<source>`.
+2. The Linux CI workflow checks that version commit before promotion to `main`.
 3. Crate archives and Cargo index entries publish from that verified commit
    using its tested dependency selection.
 
-Release preparation uses a normal push, so a concurrent change to `main` cannot
-be overwritten. Declare breaking changes and consumer minimum versions in the
-feature PR. Documentation changes with no effect on packaged contents do not
-create a new package version.
+Promotion uses a normal push. If newer work reaches `main` before the version
+commit, the old run finishes successfully with publication skipped. It creates
+no release tags, archives, index entries or native bundles. This also covers a
+concurrent update between the final fetch and push. A rejected push with no
+concurrent update still fails so authentication or server errors remain visible.
 
-Use **Re-run failed jobs** on the original Release run to finish a failed
-publication with its verified commit, even if `main` has advanced. Dispatch
-**Release** on `main` to prepare current changes or resume its version commit.
-Retries can finish draft releases; published versions and archives are immutable.
+Use **Re-run failed jobs** to finish publication of a verified version commit
+that already reached `main`, including after later work was merged. A superseded
+candidate that never reached `main` stays skipped. Dispatch **Release** on `main`
+to prepare the current source. Published versions and archives are immutable.
+
+Declare breaking changes and consumer minimum versions in the feature PR.
+Documentation changes with no effect on packaged contents do not create a new
+package version.
 
 ## CI platforms and manual builds
 
