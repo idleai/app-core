@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/idleai/app-core/compare/app-core-v0.2.2...app-core-v0.3.0) - 2026-11-01
+
+### Fixed
+
+- *(history)* restore activity selection and disclosure behavior ([#36](https://github.com/idleai/app-core/pull/36))
+
 ## [0.2.2](https://github.com/idleai/app-core/compare/app-core-v0.2.1...app-core-v0.2.2) - 2026-10-28
 
 ### Other
