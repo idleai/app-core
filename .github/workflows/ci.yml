@@ -12,6 +12,11 @@ on:
         default: latest
   workflow_call:
     inputs:
+      all_platforms:
+        description: Enable platform checks only from a manually dispatched workflow
+        required: false
+        type: boolean
+        default: false
       dependency_mode:
         description: Select latest compatible releases or replay committed selections
         required: false
@@ -41,13 +46,13 @@ permissions:
 jobs:
   dependencies:
     name: Preflight and dependencies
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && (vars.IDLE_BACKGROUND_RUNNER || 'idle-background-linux-x64') || 'ubuntu-24.04' }}
     defaults:
       run:
         working-directory: app-core
     outputs:
       artifact_id: ${{ steps.save.outputs.artifact-id }}
-      windows_dependencies: ${{ steps.scope.outputs.windows_dependencies }}
+      windows_dependencies: ${{ github.event_name == 'workflow_dispatch' && inputs.all_platforms && steps.scope.outputs.windows_dependencies || 'false' }}
       native_bindings: ${{ steps.scope.outputs.native_bindings }}
       consumers: ${{ steps.scope.outputs.consumers }}
       browser: ${{ steps.scope.outputs.browser }}
@@ -106,7 +111,7 @@ jobs:
     env:
       IDLE_CHECK_NATIVE_BINDINGS: ${{ needs.dependencies.outputs.native_bindings }}
       IDLE_RELEASE_INPUTS: ${{ github.workspace }}/../release-inputs/released-dependencies.json
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && vars.IDLE_BACKGROUND_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && (vars.IDLE_BACKGROUND_RUNNER || 'idle-background-linux-x64') || 'ubuntu-24.04' }}
     defaults:
       run:
         working-directory: app-core
@@ -193,7 +198,7 @@ jobs:
     env:
       IDLE_RELEASE_INPUTS: ${{ github.workspace }}/../release-inputs/released-dependencies.json
     name: Extension compatibility
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && vars.IDLE_BACKGROUND_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && (vars.IDLE_BACKGROUND_RUNNER || 'idle-background-linux-x64') || 'ubuntu-24.04' }}
     defaults:
       run:
         working-directory: app-core
@@ -249,7 +254,7 @@ jobs:
     name: CI required
     if: always()
     needs: [dependencies, check, consumers, windows_dependencies]
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.IDLE_LINUX_RUNNER || github.event_name != 'pull_request' && (vars.IDLE_BACKGROUND_RUNNER || 'idle-background-linux-x64') || 'ubuntu-24.04' }}
     permissions:
       contents: read
       actions: read
