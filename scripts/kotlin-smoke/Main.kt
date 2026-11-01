@@ -291,7 +291,7 @@ private fun sessionSmoke(mode: WorkspaceMode) = AppCore().use { client ->
         MemberInfo("bob", "Bob", 1uL, MemberRole.MEMBER, MemberStatus.ACTIVE))
     val snapshot = SessionSnapshot(context, cursor, actor,
         SessionCapabilities(SessionCapability.UNAVAILABLE, SessionCapability.AVAILABLE, SessionCapability.AVAILABLE),
-        members, listOf(session), listOf(grant), emptyList(), 1000uL)
+        members, listOf(session), listOf(grant), emptyList(), emptyList(), 1000uL)
     val follow = respond(client, load, SessionResponse.Ok(SessionResult.Snapshot(snapshot)).bincodeSerialize())
     val watch = follow.request(EffectFfi.Session(SessionOperation(context, SessionAction.Watch(cursor))))
     check(view(client).sessions.sessions.single().relationship == SessionRelationship.INVITED)
@@ -308,7 +308,7 @@ private fun sessionSmoke(mode: WorkspaceMode) = AppCore().use { client ->
     check(view(client).sessions.prompts.single().contributor == actor)
     val delivery = SessionDelivery(1100uL, ULong.MAX_VALUE, 1150uL)
     val update = SessionInputUpdate(SessionInputRef("session", key), actor, "runtime", 4uL,
-        SessionInputState.Completed(delivery, 1500uL, SessionCompletion.Succeeded))
+        SessionInputState.Completed(delivery, 1500uL, SessionCompletion.Succeeded), null)
     val through = SessionCursor("workspace", "bob", "stream", 101uL)
     val changes = SessionChanges(cursor, through, listOf(SessionChangeEvent(101uL, SessionChange.Input(update))), 1500uL)
     respond(client, watch, SessionResponse.Ok(SessionResult.Changes(changes)).bincodeSerialize())

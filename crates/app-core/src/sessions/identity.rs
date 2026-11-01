@@ -152,8 +152,9 @@ pub struct SessionInfo {
     pub runtime: SessionRuntimeBinding,
     /// Optional parent directory session.
     pub parent: Option<String>,
-    /// Explicit immutable logical session binding.
-    pub history: SessionItemBinding,
+    /// Explicit immutable logical session binding, once a recording adapter supplies it.
+    /// A live runner can exist before any recorded history is available.
+    pub history: Option<SessionItemBinding>,
 }
 
 /// Session participation only; no variant grants file, process or model access.
@@ -275,6 +276,31 @@ pub struct SessionSnapshot {
     /// Last retained facts, authenticated by the provider when recorded, including
     /// prior runtimes after relocation. Missing prompt text remains unknown.
     pub inputs: Vec<SessionInputUpdate>,
+    /// Latest bounded native output for each visible runner.
+    #[serde(default)]
+    pub transcripts: Vec<SessionTranscript>,
     /// Provider's Unix clock for grant and first-receipt deadlines.
     pub now_ms: u64,
+}
+
+/// Native runtime output, separate from immutable recorded history.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, facet::Facet)]
+#[expect(
+    clippy::unsafe_derive_deserialize,
+    reason = "Facet reflection adds no safety invariants"
+)]
+pub struct SessionTranscript {
+    /// Directory session that produced this output.
+    pub session_id: String,
+    /// Native turn identity.
+    pub turn_id: String,
+    /// Original prompt when the runtime has recorded the exact native turn mapping.
+    #[serde(default)]
+    pub input: Option<super::SessionInputRef>,
+    /// Runtime's current native turn status.
+    pub status: String,
+    /// Bounded display text from the runtime.
+    pub text: String,
+    /// Full output remains available through the native runner history.
+    pub truncated: bool,
 }

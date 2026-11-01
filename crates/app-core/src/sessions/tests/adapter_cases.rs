@@ -53,7 +53,12 @@ fn protocol_snapshot_requires_explicit_item_mapping_and_drops_compute_provider_g
     let bindings = shell
         .sessions
         .iter()
-        .map(|session| (session.id.as_str().into(), session.history.clone()))
+        .map(|session| {
+            (
+                session.id.as_str().into(),
+                session.history.clone().expect("recorded binding"),
+            )
+        })
         .collect();
     let projected =
         SessionSnapshot::from_protocol(&source, &adapter, &bindings).expect("bound snapshot");
@@ -141,7 +146,8 @@ fn f20_runtime_fixture_preserves_large_order_and_correlated_identity() {
         | SessionResult::SnapshotRequired
         | SessionResult::Created { .. }
         | SessionResult::Acknowledged(_)
-        | SessionResult::Unknown => None,
+        | SessionResult::Unknown
+        | SessionResult::Retryable(_) => None,
     }
     .expect("runtime input result");
     assert_eq!(
@@ -277,10 +283,10 @@ fn queries_and_scripts_reject_context_substitution_without_consuming_work() {
 #[test]
 fn malformed_logical_item_snapshot_is_rejected_by_the_reducer() {
     let mut source = snapshot(WorkspaceMode::Managed, "contributor-bob");
-    source.sessions.first_mut().expect("session").history = SessionItemBinding {
+    source.sessions.first_mut().expect("session").history = Some(SessionItemBinding {
         chain: "chain-original".into(),
         item: "abc".into(),
-    };
+    });
     let core = crate::Core::new();
     let mut load = request(send(&core, Event::Connect(source.context.clone())));
     let _effects = core

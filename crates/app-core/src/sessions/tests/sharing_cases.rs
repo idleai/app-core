@@ -15,7 +15,7 @@ fn created_session(source: &crate::sessions::SessionSnapshot) -> SessionInfo {
     let mut info = source.sessions.first().expect("fixture session").clone();
     info.id = "allocated-session".into();
     info.title = "New runner".into();
-    info.history.item = "c".repeat(64);
+    info.history.as_mut().expect("recorded binding").item = "c".repeat(64);
     info
 }
 
@@ -111,14 +111,15 @@ fn invalid_create_responses_cannot_publish_session_identity() {
                 }
             }
             2 => {
-                info.history.item = "session-id-is-not-an-item".into();
+                info.history.as_mut().expect("recorded binding").item =
+                    "session-id-is-not-an-item".into();
                 SessionResult::Created {
                     request: key,
                     session: info,
                 }
             }
             _ => {
-                info.history.item = "a".repeat(64);
+                info.history.as_mut().expect("recorded binding").item = "a".repeat(64);
                 SessionResult::Created {
                     request: key,
                     session: info,
@@ -242,7 +243,7 @@ fn delayed_creation_rejects_conflicting_revisions_and_rebound_logical_items() {
             known.title = "Conflicting title at the same revision".into();
         } else {
             known.revision = 2;
-            created.history.item = "d".repeat(64);
+            created.history.as_mut().expect("recorded binding").item = "d".repeat(64);
         }
         let (core, watch) = connected(source);
         let mut create = request(send(

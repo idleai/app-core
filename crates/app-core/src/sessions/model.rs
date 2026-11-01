@@ -192,7 +192,7 @@ impl State {
             sessions
                 .iter()
                 .find(|view| view.session.id == *id)
-                .map(|view| view.session.history.clone())
+                .and_then(|view| view.session.history.clone())
         });
         let mutations: Vec<_> = self
             .mutations
@@ -242,6 +242,14 @@ impl State {
             selected: self.selected.clone(),
             selected_history,
             prompts,
+            transcripts: self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+                snapshot
+                    .transcripts
+                    .iter()
+                    .filter(|entry| self.can_observe(&entry.session_id))
+                    .cloned()
+                    .collect()
+            }),
             mutations,
             action_error: self.action_error.clone(),
         }

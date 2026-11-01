@@ -87,6 +87,7 @@ impl From<&RuntimeInputUpdate> for SessionInputUpdate {
             runtime_id: value.runtime_id.0.clone(),
             revision: value.revision.0,
             state,
+            text: None,
         }
     }
 }

@@ -10,6 +10,7 @@ mod observation_cases;
 mod recovery_cases;
 mod relocation_cases;
 mod root_cases;
+mod saved_cases;
 mod sharing_cases;
 mod wire_cases;
 
@@ -85,6 +86,7 @@ fn update(
         runtime_id: "runtime-evo".into(),
         revision,
         state,
+        text: None,
     }
 }
 
