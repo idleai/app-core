@@ -25,7 +25,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app-core"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "bincode",
  "crux_core",
@@ -867,9 +867,9 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idle-history"
-version = "0.5.3"
+version = "0.5.4"
 source = "sparse+https://raw.githubusercontent.com/idleai/host-tools/cargo-index/"
-checksum = "d611cfa3e8f3a9dc21e5b60e8018d63596e2d8f062046d50b3c374ab0fb34279"
+checksum = "361386bbbe4d9ecf97d48b0ed73a5be5b86d4e12d067e8e6b164c0e6baf2eb62"
 dependencies = [
  "editchain-core",
  "facet",
@@ -880,9 +880,9 @@ dependencies = [
 
 [[package]]
 name = "idle-history-native"
-version = "0.5.3"
+version = "0.5.4"
 source = "sparse+https://raw.githubusercontent.com/idleai/host-tools/cargo-index/"
-checksum = "9bc313723e53f4aabdda5254350cee919f7f29d4c86a62fcd25797666fffac34"
+checksum = "7847f67afe468389408d65ad16eb6a09e37e931f3e0056ceba4cceb19ecc20e1"
 dependencies = [
  "editchain-core",
  "editchain-engine",
@@ -893,9 +893,9 @@ dependencies = [
 
 [[package]]
 name = "idle-protocol"
-version = "0.5.3"
+version = "0.5.4"
 source = "sparse+https://raw.githubusercontent.com/idleai/host-tools/cargo-index/"
-checksum = "c99c3dd72094ae097584d9b3887b7afc399069196ba7f906f99d677b72964ccf"
+checksum = "1d4e3270d0109f4172f4ebe86ea61476a808a698ed67cdd23cb26bb76bae82b4"
 dependencies = [
  "facet",
  "serde",
