@@ -10,6 +10,10 @@ on:
         type: choice
         options: [latest, locked]
         default: latest
+      check_consumers:
+        description: Also test the latest released extension against this app-core revision
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       all_platforms:
@@ -70,6 +74,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PR_CI: ${{ github.event_name == 'pull_request' }}
           FULL_CI: ${{ github.event_name != 'pull_request' || inputs.revision != '' }}
+          CHECK_RELEASED_CONSUMERS: ${{ github.event_name == 'workflow_dispatch' && inputs.check_consumers }}
         run: python3 scripts/ci_scope.py
       - uses: dtolnay/rust-toolchain@stable
         with:
