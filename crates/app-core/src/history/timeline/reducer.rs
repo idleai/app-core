@@ -64,6 +64,27 @@ pub enum Event {
         /// Open the native editor after selection.
         open: bool,
     },
+    /// Apply a single row-body click using the host-supplied row roles.
+    Click {
+        /// Composition containing the row.
+        surface: Surface,
+        /// Stable physical occurrence.
+        occurrence: String,
+    },
+    /// Select a row and open its full recorded JSON.
+    Inspect {
+        /// Composition containing the row.
+        surface: Surface,
+        /// Stable physical occurrence.
+        occurrence: String,
+    },
+    /// Toggle attached item details independently of the task disclosure.
+    Details {
+        /// Composition containing the row.
+        surface: Surface,
+        /// Physical parent occurrence.
+        occurrence: String,
+    },
     /// Open an alternative recorded target for the current exact selection.
     Open(OpenTarget),
     /// Navigate without opening documents, including across page boundaries.
@@ -140,6 +161,7 @@ pub(in crate::history) fn update(event: Event, model: &mut Model) -> TimelineCom
             state.view.focus = Some(occurrence.clone());
             state.view.focus_revision = state.view.focus_revision.saturating_add(1);
             state.temporary.clear();
+            let _inserted = state.exposed.insert(occurrence.clone());
             window(model, surface, Position::Seek(occurrence))
         }
         Event::Reveal { surface, selection } => {
@@ -190,6 +212,7 @@ pub(in crate::history) fn update(event: Event, model: &mut Model) -> TimelineCom
             let state = model.surfaces.entry(surface).or_default();
             state.view.filter = filter;
             state.temporary.clear();
+            state.exposed.clear();
             state.view.search = super::model::Search::default();
             state.view.focus = None;
             state.view.focus_revision = state.view.focus_revision.saturating_add(1);
@@ -202,6 +225,18 @@ pub(in crate::history) fn update(event: Event, model: &mut Model) -> TimelineCom
             occurrence,
             open,
         } => select(model, surface, &occurrence, open),
+        Event::Click {
+            surface,
+            occurrence,
+        } => click(model, surface, &occurrence),
+        Event::Inspect {
+            surface,
+            occurrence,
+        } => inspect(model, surface, &occurrence),
+        Event::Details {
+            surface,
+            occurrence,
+        } => details(model, surface, &occurrence),
         Event::Open(target) => {
             let Some(selected) = &model.selected else {
                 return Command::done();
@@ -360,6 +395,85 @@ fn select(
     }
 }
 
+fn inspect(model: &mut Model, surface: Surface, occurrence: &str) -> TimelineCommand {
+    let Some(row) = current_row(model, surface, occurrence) else {
+        return Command::done();
+    };
+    select(model, surface, occurrence, false).and(open(
+        model,
+        row.address,
+        OpenTarget::OperationJson,
+        None,
+    ))
+}
+
+fn current_row(
+    model: &Model,
+    surface: Surface,
+    occurrence: &str,
+) -> Option<idle_history::timeline::Row> {
+    model
+        .surfaces
+        .get(&surface)?
+        .view
+        .window
+        .as_ref()?
+        .rows
+        .iter()
+        .find(|row| row.occurrence == occurrence)
+        .cloned()
+}
+
+fn click(model: &mut Model, surface: Surface, occurrence: &str) -> TimelineCommand {
+    let Some(row) = current_row(model, surface, occurrence) else {
+        return Command::done();
+    };
+    let selection = select(model, surface, occurrence, false);
+    if let Some(group) = row.group.as_ref().filter(|group| {
+        group.header && (row.presentation.task_summary || row.presentation.label.is_empty())
+    }) {
+        let expanded = model
+            .surfaces
+            .get(&surface)
+            .and_then(|state| state.manual.get(&group.id))
+            .copied()
+            .unwrap_or(group.expanded);
+        if !expanded {
+            return selection.and(toggle(model, surface, &group.id));
+        }
+    }
+    if row.presentation.file {
+        selection.and(open(model, row.address, row.open, row.unavailable))
+    } else if row.details.is_some() {
+        selection.and(details(model, surface, occurrence))
+    } else {
+        selection
+    }
+}
+
+fn details(model: &mut Model, surface: Surface, occurrence: &str) -> TimelineCommand {
+    if current_row(model, surface, occurrence).is_none_or(|row| row.details.is_none()) {
+        return Command::done();
+    }
+    let state = model.surfaces.entry(surface).or_default();
+    if !state.details.remove(occurrence) {
+        let _inserted = state.details.insert(occurrence.into());
+    }
+    while state.details.len() > 1_024 {
+        let _removed = state.details.pop_first();
+    }
+    if !state
+        .view
+        .pending_disclosures
+        .iter()
+        .any(|id| id == occurrence)
+    {
+        state.view.pending_disclosures.push(occurrence.into());
+    }
+    let anchor = state.anchor.clone();
+    window(model, surface, Position::Refresh(anchor))
+}
+
 fn open(
     model: &mut Model,
     address: idle_history::timeline::Target,
@@ -436,7 +550,17 @@ fn toggle(model: &mut Model, surface: Surface, id: &str) -> TimelineCommand {
     let Some(group) = group else {
         return Command::done();
     };
-    let _previous = state.manual.insert(id.to_owned(), !group.expanded);
+    let expanded = state.manual.get(id).copied().unwrap_or(group.expanded);
+    let _previous = state.manual.insert(id.to_owned(), !expanded);
+    state.exposed.clear();
+    if !state
+        .view
+        .pending_disclosures
+        .iter()
+        .any(|pending| pending == id)
+    {
+        state.view.pending_disclosures.push(id.into());
+    }
     while state.manual.len() > 1_024 {
         let _removed = state.manual.pop_first();
     }
@@ -448,19 +572,13 @@ fn toggle(model: &mut Model, surface: Surface, id: &str) -> TimelineCommand {
 fn find(model: &mut Model, surface: Surface, text: String) -> TimelineCommand {
     model.pending.retain(|pending| pending.surface != surface || !matches!(&pending.query, QueryAction::Timeline(request) if matches!(request.action, Action::Find { .. })));
     let state = model.surfaces.entry(surface).or_default();
-    let restore = !state.temporary.is_empty();
-    state.temporary.clear();
     state.view.search = super::model::Search {
         text: text.clone(),
         ..super::model::Search::default()
     };
     if text.is_empty() {
-        let anchor = state.anchor.clone();
-        return if restore {
-            window(model, surface, Position::Refresh(anchor))
-        } else {
-            render::render()
-        };
+        model.selected = None;
+        return render::render();
     }
     if text.len() > 4_096 {
         state.view.search.text.clear();
@@ -517,10 +635,7 @@ pub(super) fn navigate_match(model: &mut Model, surface: Surface, delta: i32) ->
     {
         state.view.focus = Some(hit.occurrence.clone());
         state.view.focus_revision = state.view.focus_revision.saturating_add(1);
-        state.temporary.clear();
-        if let Some(group) = hit.group {
-            let _inserted = state.temporary.insert(group);
-        }
+        let _inserted = state.exposed.insert(hit.occurrence.clone());
         model.selected = Some(Selection {
             occurrence: hit.occurrence.clone(),
             address: hit.address,

@@ -95,6 +95,13 @@ pub(super) fn complete(model: &mut Model, id: u64, result: QueryOutput) -> Timel
                 return render::render();
             }
             let state = model.surfaces.entry(pending.surface).or_default();
+            if model
+                .selected
+                .as_ref()
+                .is_some_and(|selected| hidden_selection(state, &value, selected))
+            {
+                model.selected = None;
+            }
             if let Action::Window {
                 position: Position::Seek(id),
                 ..
@@ -234,7 +241,40 @@ fn fail(model: &mut Model, surface: Surface, action: &Action, failure: EffectErr
     } else {
         state.view.state = RequestState::Failed(failure);
         state.view.progress = None;
+        state.view.pending_disclosures.clear();
     }
+}
+
+fn hidden_selection(state: &State, value: &Window, selected: &super::model::Selection) -> bool {
+    if value
+        .rows
+        .iter()
+        .any(|row| row.occurrence == selected.occurrence)
+    {
+        return false;
+    }
+    let Some(rows) = state.view.window.as_ref().map(|window| &window.rows) else {
+        return false;
+    };
+    let Some(row) = rows
+        .iter()
+        .find(|row| row.occurrence == selected.occurrence)
+    else {
+        return false;
+    };
+    if let Some(parent) = &row.presentation.parent {
+        if state.view.pending_disclosures.contains(parent) && !state.details.contains(parent) {
+            return true;
+        }
+        return rows
+            .iter()
+            .find(|row| &row.occurrence == parent)
+            .and_then(|row| row.group.as_ref())
+            .is_some_and(|group| state.manual.get(&group.id) == Some(&false));
+    }
+    row.group
+        .as_ref()
+        .is_some_and(|group| !group.header && state.manual.get(&group.id) == Some(&false))
 }
 
 fn validate(window: &Window) -> Result<(), EffectError> {
@@ -344,6 +384,7 @@ fn install(state: &mut State, action: &Action, mut value: Window) -> Result<(), 
     state.view.window = Some(value);
     state.view.state = RequestState::Ready;
     state.view.progress = None;
+    state.view.pending_disclosures.clear();
     bound(state, cursor.map(|cursor| (cursor, trim_newer)))
 }
 

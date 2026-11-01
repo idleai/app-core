@@ -100,6 +100,9 @@ pub struct SurfaceView {
     pub new_activity: bool,
     /// Serialized bytes currently retained for this composition's timeline.
     pub cached_bytes: u64,
+    /// Controls awaiting the latest authoritative disclosure window.
+    #[serde(default)]
+    pub pending_disclosures: Vec<String>,
 }
 
 /// Shared timeline selection with independent editor and mini windows.
@@ -127,6 +130,8 @@ pub(super) struct State {
     pub view: SurfaceView,
     pub active: bool,
     pub manual: BTreeMap<String, bool>,
+    pub details: BTreeSet<String>,
+    pub exposed: BTreeSet<String>,
     pub temporary: BTreeSet<String>,
     pub reading: BTreeSet<String>,
     pub visible: BTreeSet<String>,
@@ -150,6 +155,8 @@ impl State {
         }
         View {
             filter: self.view.filter.clone(),
+            details: self.details.iter().cloned().collect(),
+            exposed: self.exposed.iter().cloned().collect(),
             disclosures: choices
                 .into_iter()
                 .map(|(group, expanded)| idle_history::timeline::Disclosure { group, expanded })
@@ -183,12 +190,14 @@ impl Model {
             self.surfaces
                 .iter()
                 .filter(|(_, state)| state.active)
-                .map(|(surface, _)| {
+                .map(|(surface, state)| {
                     (
                         *surface,
                         State {
                             active: true,
                             at_newest: true,
+                            manual: state.manual.clone(),
+                            details: state.details.clone(),
                             ..State::default()
                         },
                     )
