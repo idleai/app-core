@@ -5,8 +5,8 @@
         "vscode-extension": {
           "package": "idle-vscode-webview",
           "repository": "idleai/vscode-extension",
-          "sha256": "47be44903267c51493afdc745de3288ff4615a5320e024ce1d36184ef1b268f8",
-          "tag": "idle-vscode-webview-v0.2.2",
+          "sha256": "8f4c7934b76681fd06ae82d961ad3746d80d45ba8e706cb240f19c238819f6d6",
+          "tag": "idle-vscode-webview-v0.2.3",
           "version": ">=0.1.0, <1.0.0"
         }
       },

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/idleai/app-core/compare/app-core-v0.3.0...app-core-v0.4.0) - 2026-11-02
+
+### Added
+
+- recover live session requests and attributed native output ([#42](https://github.com/idleai/app-core/pull/42))
+
 ## [0.3.0](https://github.com/idleai/app-core/compare/app-core-v0.2.2...app-core-v0.3.0) - 2026-11-01
 
 ### Fixed
