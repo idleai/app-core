@@ -61,6 +61,14 @@ fn authorize(state: &State, mutation: &SessionMutation, retry: bool) -> Result<(
             expires_at_ms,
         } => {
             permitted(state, session_id, SessionPermission::Invite)?;
+            if snapshot.context.mode == crate::workspace::WorkspaceMode::Standalone
+                && permissions.contains(&SessionPermission::Invite)
+            {
+                return Err(validation::error(
+                    SessionErrorCode::UnsupportedOperation,
+                    "Only the session owner can manage standalone sharing",
+                ));
+            }
             validation::nonempty(grant_id)?;
             if !state.member_active(grantee) {
                 return Err(validation::error(

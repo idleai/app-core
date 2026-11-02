@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use idle_history::requests::RequestTracker;
 
-use crate::workspace::{MemberInfo, MemberStatus};
+use crate::workspace::{MemberInfo, MemberStatus, WorkspaceMode};
 
 use super::{
     SessionCapabilities, SessionCapability, SessionContext, SessionError, SessionGrant,
@@ -83,6 +83,11 @@ impl State {
                         .is_none_or(|expiry| self.now_ms < expiry)
                 {
                     for permission in &grant.permissions {
+                        if *permission == SessionPermission::Invite
+                            && context.mode == WorkspaceMode::Standalone
+                        {
+                            continue;
+                        }
                         if !permissions.contains(permission) {
                             permissions.push(*permission);
                         }

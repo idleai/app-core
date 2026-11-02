@@ -435,6 +435,82 @@ fn disconnected_runtime_capabilities_stay_unavailable_and_fail_visibly() {
 }
 
 #[test]
+fn standalone_sharing_stays_with_the_owner() {
+    let mut source = snapshot(WorkspaceMode::Standalone, "contributor-bob");
+    for grant in &mut source.grants {
+        if grant.grantee == "contributor-bob" {
+            grant.permissions.push(SessionPermission::Invite);
+        }
+    }
+    let (bob, _watch) = connected(source);
+    select(&bob);
+    assert!(
+        bob.view()
+            .sessions
+            .sessions
+            .iter()
+            .all(|session| { !session.actions.contains(&SessionPermission::Invite) }),
+        "standalone authority does not support delegated sharing"
+    );
+    assert!(
+        requests(send(
+            &bob,
+            Event::Invite {
+                id: mutation_id("delegate-share"),
+                grant_id: "delegate-grant".into(),
+                grantee: "contributor-alice".into(),
+                permissions: vec![SessionPermission::Observe],
+                expires_at_ms: None,
+            }
+        ))
+        .is_empty(),
+        "a retained invite grant cannot bypass the standalone policy"
+    );
+
+    let (alice, _watch) = connected(snapshot(WorkspaceMode::Standalone, "contributor-alice"));
+    select(&alice);
+    assert!(
+        requests(send(
+            &alice,
+            Event::Invite {
+                id: mutation_id("unsupported-share"),
+                grant_id: "unsupported-grant".into(),
+                grantee: "contributor-bob".into(),
+                permissions: vec![SessionPermission::Observe, SessionPermission::Invite],
+                expires_at_ms: None,
+            }
+        ))
+        .is_empty(),
+        "the owner cannot offer an unsupported permission"
+    );
+    assert_eq!(
+        alice.view().sessions.action_error.map(|error| error.code),
+        Some(SessionErrorCode::UnsupportedOperation),
+        "the unsupported choice is explained"
+    );
+    let invitation = request(send(
+        &alice,
+        Event::Invite {
+            id: mutation_id("owner-share"),
+            grant_id: "owner-grant".into(),
+            grantee: "contributor-bob".into(),
+            permissions: vec![SessionPermission::Observe, SessionPermission::SubmitInput],
+            expires_at_ms: None,
+        },
+    ));
+    assert!(
+        matches!(
+            invitation.operation.action,
+            SessionAction::Mutate {
+                mutation: SessionMutation::Invite { .. },
+                ..
+            }
+        ),
+        "the owner can still share observation and input"
+    );
+}
+
+#[test]
 fn grant_retry_keeps_original_intent_after_its_change_event_arrives() {
     let (core, watch) = connected(snapshot(WorkspaceMode::Managed, "contributor-alice"));
     select(&core);
