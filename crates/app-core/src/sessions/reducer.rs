@@ -74,8 +74,10 @@ pub enum SessionEvent {
         /// Monotonic client-local continuation token.
         token: u64,
         /// Authenticated host result for that pending operation.
-        result: SessionOutput,
+        result: Box<SessionOutput>,
     },
+    /// Restore a saved outgoing request and query its status without sending it again.
+    Restore(Box<SessionOperation>),
 }
 
 /// Shared reducer for standalone and managed session interaction.
@@ -153,6 +155,7 @@ impl App for Sessions {
             SessionEvent::Revoke { id, grant_id } => mutations::revoke(model, id, grant_id),
             SessionEvent::Retry(id) => mutations::retry(model, &id),
             SessionEvent::Recover(id) => mutations::recover(model, &id),
+            SessionEvent::Restore(operation) => mutations::restore(model, *operation),
             SessionEvent::RefreshInput(input) => {
                 if !model.state.ready()
                     || !model.state.can_observe(&input.session_id)
@@ -186,7 +189,7 @@ impl App for Sessions {
                 model.state = State::default();
                 render::render()
             }
-            SessionEvent::Completed { token, result } => complete(model, token, result),
+            SessionEvent::Completed { token, result } => complete(model, token, *result),
         }
     }
 
@@ -253,7 +256,10 @@ pub(super) fn request(model: &mut Model, action: SessionAction) -> SessionComman
         }
     };
     Command::request_from_shell(operation)
-        .then_send(move |result| SessionEvent::Completed { token, result })
+        .then_send(move |result| SessionEvent::Completed {
+            token,
+            result: Box::new(result),
+        })
         .and(render::render())
 }
 

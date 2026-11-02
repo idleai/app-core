@@ -181,7 +181,7 @@ func sessionSmoke(_ mode: WorkspaceMode) throws {
                    MemberInfo(contributorId: "bob", displayName: "Bob", revision: 1, role: .member, status: .active)]
     let snapshot = SessionSnapshot(context: context, cursor: cursor, contributor: actor,
         capabilities: SessionCapabilities(create: .unavailable, input: .available, share: .available),
-        members: members, sessions: [session], grants: [grant], inputs: [], nowMs: 1000)
+        members: members, sessions: [session], grants: [grant], inputs: [], transcripts: [], nowMs: 1000)
     let follow = try EffectBatch.bincodeDeserialize(input: Array(client.handleResponse(id: load, response: Data(SessionResponse.ok(.snapshot(snapshot)).bincodeSerialize())))).requests
     let watch = try request(follow, .session(SessionOperation(context: context, action: .watch(after: cursor))))
     check(try view(client).sessions.sessions.first?.relationship == .invited)
@@ -198,7 +198,7 @@ func sessionSmoke(_ mode: WorkspaceMode) throws {
     check(try view(client).sessions.prompts.first?.contributor == actor)
     let delivery = SessionDelivery(acceptedAtMs: 1100, order: UInt64.max, orderedAtMs: 1150)
     let update = SessionInputUpdate(input: SessionInputRef(sessionId: "session", request: key), contributor: actor, runtimeId: "runtime", revision: 4,
-                                    state: .completed(delivery: delivery, completedAtMs: 1500, outcome: .succeeded))
+                                    state: .completed(delivery: delivery, completedAtMs: 1500, outcome: .succeeded), text: nil)
     let through = SessionCursor(workspaceId: "workspace", contributorId: "bob", streamId: "stream", position: 101)
     let changes = SessionChanges(after: cursor, through: through, events: [SessionChangeEvent(position: 101, change: .input(update))], nowMs: 1500)
     _ = try client.handleResponse(id: watch, response: Data(SessionResponse.ok(.changes(changes)).bincodeSerialize()))

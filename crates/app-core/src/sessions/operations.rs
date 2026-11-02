@@ -180,6 +180,9 @@ pub enum SessionResult {
     Input(SessionInputUpdate),
     /// No retained coordination result; this does not authorize a new mutation.
     Unknown,
+    /// Provider confirmed that retrying the original immutable request is permitted.
+    /// This never sends the mutation automatically.
+    Retryable(SessionRequestKey),
 }
 
 /// Portable f20 failure classifications plus client-side invalid selections.

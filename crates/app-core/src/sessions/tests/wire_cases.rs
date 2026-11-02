@@ -62,7 +62,7 @@ fn session_shell_payloads_round_trip_and_malformed_responses_leave_continuations
 fn shell_rejects_forged_runtime_completions() {
     let event = RootEvent::Sessions(Event::Completed {
         token: 1,
-        result: Ok(SessionResult::Unknown),
+        result: Box::new(Ok(SessionResult::Unknown)),
     });
     let mut output = Vec::new();
     assert!(

@@ -95,14 +95,20 @@ pub(super) fn session(value: &SessionInfo, context: &SessionContext) -> Result<(
     ] {
         nonempty(id)?;
     }
-    if value.revision == 0 || value.history.chain != context.chain {
+    if value.revision == 0
+        || value
+            .history
+            .as_ref()
+            .is_some_and(|history| history.chain != context.chain)
+    {
         return Err(invalid(
             "Session metadata has an invalid revision or logical chain binding",
         ));
     }
-    if OpId::from_display_str(&value.history.item)
-        .is_none_or(|id| value.history.item.len() != 64 || id.to_string() != value.history.item)
-    {
+    if value.history.as_ref().is_some_and(|history| {
+        OpId::from_display_str(&history.item)
+            .is_none_or(|id| history.item.len() != 64 || id.to_string() != history.item)
+    }) {
         return Err(invalid(
             "Session history requires a complete canonical logical item ID",
         ));
@@ -123,16 +129,20 @@ pub(super) fn remember(
 ) -> Result<(), SessionError> {
     session(value, context)?;
     let key = (context.workspace_id.clone(), value.id.clone());
-    if bindings.get(&key).is_some_and(|old| old != &value.history)
+    if bindings
+        .get(&key)
+        .is_some_and(|old| Some(old) != value.history.as_ref())
         || bindings
             .iter()
-            .any(|(other, binding)| other != &key && binding == &value.history)
+            .any(|(other, binding)| other != &key && Some(binding) == value.history.as_ref())
     {
         return Err(invalid(
             "A session's explicit logical item binding cannot be changed or reused",
         ));
     }
-    drop(bindings.insert(key, value.history.clone()));
+    if let Some(history) = &value.history {
+        drop(bindings.insert(key, history.clone()));
+    }
     Ok(())
 }
 
@@ -140,7 +150,7 @@ pub(super) fn session_revision(old: &SessionInfo, next: &SessionInfo) -> Result<
     if next.revision < old.revision || (next.revision == old.revision && next != old) {
         return Err(invalid("Session metadata revision regressed or conflicts"));
     }
-    if old.history != next.history {
+    if old.history.is_some() && old.history != next.history {
         return Err(invalid("Session logical item binding changed"));
     }
     Ok(())
@@ -224,6 +234,7 @@ pub(super) fn snapshot(value: &SessionSnapshot, state: &State) -> Result<(), Ses
     if value.members.iter().any(|member| member.revision == 0) {
         return Err(invalid("Membership revisions must be positive"));
     }
+    transcripts(value)?;
     if let Some(old) = &state.snapshot {
         if value.contributor != old.contributor {
             return Err(invalid(
@@ -252,6 +263,28 @@ pub(super) fn snapshot(value: &SessionSnapshot, state: &State) -> Result<(), Ses
     Ok(())
 }
 
+fn transcripts(snapshot: &SessionSnapshot) -> Result<(), SessionError> {
+    let mut seen = BTreeSet::new();
+    for output in &snapshot.transcripts {
+        nonempty(&output.turn_id)?;
+        if !seen.insert((&output.session_id, &output.turn_id))
+            || !snapshot
+                .sessions
+                .iter()
+                .any(|session| session.id == output.session_id)
+            || output.input.as_ref().is_some_and(|input| {
+                input.session_id != output.session_id
+                    || !snapshot.inputs.iter().any(|update| &update.input == input)
+            })
+        {
+            return Err(invalid(
+                "Runtime output has an invalid session or prompt mapping",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn rank(state: &SessionInputState) -> u8 {
     match state {
         SessionInputState::Rejected { .. } => 0,
@@ -273,8 +306,16 @@ fn input_transition(
         return Ok(false);
     }
     if next.revision == old.revision {
-        return if old == next {
-            Ok(false)
+        let mut next = next.clone();
+        if next.text.is_none() {
+            next.text.clone_from(&old.text);
+        }
+        let mut enriched = old.clone();
+        if enriched.text.is_none() {
+            enriched.text.clone_from(&next.text);
+        }
+        return if enriched == next {
+            Ok(old.text != next.text)
         } else {
             Err(invalid("Conflicting runtime facts at one input revision"))
         };
@@ -363,6 +404,13 @@ pub(super) fn input(
         .iter()
         .find(|prompt| prompt.input.request == update.input.request);
     if let Some(previous) = previous {
+        if update.text.as_ref().is_some_and(|text| {
+            text.len() > 32 * 1024 || previous.text.as_ref().is_some_and(|old| old != text)
+        }) {
+            return Err(invalid(
+                "Runtime prompt text conflicts with the original submission",
+            ));
+        }
         if previous.input != update.input || previous.contributor != update.contributor {
             return Err(invalid(
                 "Runtime input reused a request key for different input",
@@ -409,12 +457,15 @@ pub(super) fn input(
         .iter_mut()
         .find(|prompt| prompt.input == update.input)
     {
+        if prompt.text.is_none() {
+            prompt.text.clone_from(&update.text);
+        }
         prompt.runtime = Some(update);
     } else {
         state.prompts.push(SessionPromptView {
             input: update.input.clone(),
             contributor: update.contributor.clone(),
-            text: None,
+            text: update.text.clone(),
             submission: None,
             runtime: Some(update),
         });

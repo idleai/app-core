@@ -49,6 +49,16 @@ impl SessionInfo {
     /// Directory IDs, runtime IDs and observation IDs are never converted into items.
     #[must_use]
     pub fn from_protocol(value: &Record<Session>, history: SessionItemBinding) -> Self {
+        Self::from_record(value, Some(history))
+    }
+
+    /// Project a native live session before a recording adapter has bound its history.
+    #[must_use]
+    pub fn from_live_protocol(value: &Record<Session>) -> Self {
+        Self::from_record(value, None)
+    }
+
+    fn from_record(value: &Record<Session>, history: Option<SessionItemBinding>) -> Self {
         let session = &value.value;
         Self {
             id: session.id.0.clone(),
@@ -122,6 +132,24 @@ impl SessionSnapshot {
         adapter: &SessionAdapterContext,
         bindings: &BTreeMap<SessionId, SessionItemBinding>,
     ) -> Result<Self, SessionError> {
+        Self::project(value, adapter, Some(bindings))
+    }
+
+    /// Project authorized live sessions without inventing recorded item identities.
+    /// # Errors
+    /// Rejects malformed metadata or a different workspace, contributor or chain.
+    pub fn from_live_protocol(
+        value: &RecoverySnapshot,
+        adapter: &SessionAdapterContext,
+    ) -> Result<Self, SessionError> {
+        Self::project(value, adapter, None)
+    }
+
+    fn project(
+        value: &RecoverySnapshot,
+        adapter: &SessionAdapterContext,
+        bindings: Option<&BTreeMap<SessionId, SessionItemBinding>>,
+    ) -> Result<Self, SessionError> {
         let workspace = WorkspaceSnapshot::try_from(value)
             .map_err(|error| validation::invalid(&error.message))?;
         if workspace.workspace.id != adapter.context.workspace_id
@@ -141,10 +169,16 @@ impl SessionSnapshot {
             sessions: value
                 .sessions
                 .iter()
-                .map(|session| bound_session(session, bindings))
+                .map(|session| {
+                    bindings.map_or_else(
+                        || Ok(SessionInfo::from_live_protocol(session)),
+                        |bindings| bound_session(session, bindings),
+                    )
+                })
                 .collect::<Result<_, _>>()?,
             grants: value.grants.iter().filter_map(session_grant).collect(),
             inputs: value.inputs.iter().map(Into::into).collect(),
+            transcripts: Vec::new(),
             now_ms: adapter.now_ms,
         };
         validation::snapshot(

@@ -125,6 +125,8 @@ pub struct SessionViewModel {
     pub selected_history: Option<super::SessionItemBinding>,
     /// Attributed visible inputs. Vector position is not runtime delivery order.
     pub prompts: Vec<SessionPromptView>,
+    /// Bounded native output for the visible sessions.
+    pub transcripts: Vec<super::SessionTranscript>,
     /// Local pending, failed and acknowledged actions.
     pub mutations: Vec<SessionMutationView>,
     /// Client validation error without replacing a valid selection.

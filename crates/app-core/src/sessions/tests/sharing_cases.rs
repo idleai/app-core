@@ -15,7 +15,7 @@ fn created_session(source: &crate::sessions::SessionSnapshot) -> SessionInfo {
     let mut info = source.sessions.first().expect("fixture session").clone();
     info.id = "allocated-session".into();
     info.title = "New runner".into();
-    info.history.item = "c".repeat(64);
+    info.history.as_mut().expect("recorded binding").item = "c".repeat(64);
     info
 }
 
@@ -111,14 +111,15 @@ fn invalid_create_responses_cannot_publish_session_identity() {
                 }
             }
             2 => {
-                info.history.item = "session-id-is-not-an-item".into();
+                info.history.as_mut().expect("recorded binding").item =
+                    "session-id-is-not-an-item".into();
                 SessionResult::Created {
                     request: key,
                     session: info,
                 }
             }
             _ => {
-                info.history.item = "a".repeat(64);
+                info.history.as_mut().expect("recorded binding").item = "a".repeat(64);
                 SessionResult::Created {
                     request: key,
                     session: info,
@@ -242,7 +243,7 @@ fn delayed_creation_rejects_conflicting_revisions_and_rebound_logical_items() {
             known.title = "Conflicting title at the same revision".into();
         } else {
             known.revision = 2;
-            created.history.item = "d".repeat(64);
+            created.history.as_mut().expect("recorded binding").item = "d".repeat(64);
         }
         let (core, watch) = connected(source);
         let mut create = request(send(
@@ -430,6 +431,82 @@ fn disconnected_runtime_capabilities_stay_unavailable_and_fail_visibly() {
         core.view().sessions.action_error.map(|error| error.code),
         Some(SessionErrorCode::UnsupportedOperation),
         "unavailable operation is explicit"
+    );
+}
+
+#[test]
+fn standalone_sharing_stays_with_the_owner() {
+    let mut source = snapshot(WorkspaceMode::Standalone, "contributor-bob");
+    for grant in &mut source.grants {
+        if grant.grantee == "contributor-bob" {
+            grant.permissions.push(SessionPermission::Invite);
+        }
+    }
+    let (bob, _watch) = connected(source);
+    select(&bob);
+    assert!(
+        bob.view()
+            .sessions
+            .sessions
+            .iter()
+            .all(|session| { !session.actions.contains(&SessionPermission::Invite) }),
+        "standalone authority does not support delegated sharing"
+    );
+    assert!(
+        requests(send(
+            &bob,
+            Event::Invite {
+                id: mutation_id("delegate-share"),
+                grant_id: "delegate-grant".into(),
+                grantee: "contributor-alice".into(),
+                permissions: vec![SessionPermission::Observe],
+                expires_at_ms: None,
+            }
+        ))
+        .is_empty(),
+        "a retained invite grant cannot bypass the standalone policy"
+    );
+
+    let (alice, _watch) = connected(snapshot(WorkspaceMode::Standalone, "contributor-alice"));
+    select(&alice);
+    assert!(
+        requests(send(
+            &alice,
+            Event::Invite {
+                id: mutation_id("unsupported-share"),
+                grant_id: "unsupported-grant".into(),
+                grantee: "contributor-bob".into(),
+                permissions: vec![SessionPermission::Observe, SessionPermission::Invite],
+                expires_at_ms: None,
+            }
+        ))
+        .is_empty(),
+        "the owner cannot offer an unsupported permission"
+    );
+    assert_eq!(
+        alice.view().sessions.action_error.map(|error| error.code),
+        Some(SessionErrorCode::UnsupportedOperation),
+        "the unsupported choice is explained"
+    );
+    let invitation = request(send(
+        &alice,
+        Event::Invite {
+            id: mutation_id("owner-share"),
+            grant_id: "owner-grant".into(),
+            grantee: "contributor-bob".into(),
+            permissions: vec![SessionPermission::Observe, SessionPermission::SubmitInput],
+            expires_at_ms: None,
+        },
+    ));
+    assert!(
+        matches!(
+            invitation.operation.action,
+            SessionAction::Mutate {
+                mutation: SessionMutation::Invite { .. },
+                ..
+            }
+        ),
+        "the owner can still share observation and input"
     );
 }
 

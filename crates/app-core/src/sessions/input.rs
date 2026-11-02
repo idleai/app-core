@@ -126,6 +126,9 @@ pub struct SessionInputUpdate {
     pub revision: u64,
     /// Full runtime state at this revision.
     pub state: SessionInputState,
+    /// Exact submitted text when supplied by the authenticated runtime journal.
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 /// Coordination acknowledgement only; neither variant confirms execution.

@@ -1,5 +1,8 @@
 //! Retry-safe creation, sharing and attributed prompt dispatch.
 
+mod restored;
+pub(super) use restored::restore;
+
 use crux_core::{Command, render};
 
 use super::{
@@ -58,6 +61,14 @@ fn authorize(state: &State, mutation: &SessionMutation, retry: bool) -> Result<(
             expires_at_ms,
         } => {
             permitted(state, session_id, SessionPermission::Invite)?;
+            if snapshot.context.mode == crate::workspace::WorkspaceMode::Standalone
+                && permissions.contains(&SessionPermission::Invite)
+            {
+                return Err(validation::error(
+                    SessionErrorCode::UnsupportedOperation,
+                    "Only the session owner can manage standalone sharing",
+                ));
+            }
             validation::nonempty(grant_id)?;
             if !state.member_active(grantee) {
                 return Err(validation::error(
@@ -345,6 +356,27 @@ pub(super) fn complete(
     operation: &SessionOperation,
     result: SessionResult,
 ) -> Result<SessionCommand, SessionError> {
+    if let SessionAction::RequestStatus(key) = &operation.action
+        && matches!(
+            &result,
+            SessionResult::Created { .. } | SessionResult::Input(_)
+        )
+    {
+        let original = model
+            .state
+            .mutations
+            .iter()
+            .find(|mutation| mutation.request.key() == *key)
+            .ok_or_else(|| validation::invalid("Recovered result has no original request"))?;
+        let restored = SessionOperation {
+            context: operation.context.clone(),
+            action: SessionAction::Mutate {
+                request: original.request.clone(),
+                mutation: original.mutation.clone(),
+            },
+        };
+        return complete(model, &restored, result);
+    }
     match (&operation.action, result) {
         (
             SessionAction::Mutate {
@@ -462,6 +494,31 @@ pub(super) fn complete(
                 )
             {
                 mutation.state = SessionMutationState::Unknown;
+            }
+        }
+        (SessionAction::RequestStatus(key), SessionResult::Retryable(confirmed))
+            if *key == confirmed =>
+        {
+            let original = model
+                .state
+                .mutations
+                .iter_mut()
+                .find(|mutation| mutation.request.key() == *key)
+                .ok_or_else(|| validation::invalid("Retry advice has no original request"))?;
+            if !matches!(
+                original.state,
+                SessionMutationState::Acknowledged(_)
+                    | SessionMutationState::Created(_)
+                    | SessionMutationState::RuntimeReported
+            ) {
+                original.state = SessionMutationState::Failed(SessionError {
+                    code: SessionErrorCode::Unavailable,
+                    message: "This request is ready to retry with its original text and identity."
+                        .into(),
+                    retry: SessionRetryAdvice::SameRequest {
+                        not_before_ms: None,
+                    },
+                });
             }
         }
         _ => {

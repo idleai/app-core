@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use idle_history::requests::RequestTracker;
 
-use crate::workspace::{MemberInfo, MemberStatus};
+use crate::workspace::{MemberInfo, MemberStatus, WorkspaceMode};
 
 use super::{
     SessionCapabilities, SessionCapability, SessionContext, SessionError, SessionGrant,
@@ -83,6 +83,11 @@ impl State {
                         .is_none_or(|expiry| self.now_ms < expiry)
                 {
                     for permission in &grant.permissions {
+                        if *permission == SessionPermission::Invite
+                            && context.mode == WorkspaceMode::Standalone
+                        {
+                            continue;
+                        }
                         if !permissions.contains(permission) {
                             permissions.push(*permission);
                         }
@@ -192,7 +197,7 @@ impl State {
             sessions
                 .iter()
                 .find(|view| view.session.id == *id)
-                .map(|view| view.session.history.clone())
+                .and_then(|view| view.session.history.clone())
         });
         let mutations: Vec<_> = self
             .mutations
@@ -242,6 +247,14 @@ impl State {
             selected: self.selected.clone(),
             selected_history,
             prompts,
+            transcripts: self.snapshot.as_ref().map_or_else(Vec::new, |snapshot| {
+                snapshot
+                    .transcripts
+                    .iter()
+                    .filter(|entry| self.can_observe(&entry.session_id))
+                    .cloned()
+                    .collect()
+            }),
             mutations,
             action_error: self.action_error.clone(),
         }

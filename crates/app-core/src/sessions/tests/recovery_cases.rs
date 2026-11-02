@@ -305,7 +305,14 @@ fn snapshots_cannot_infer_or_rebind_items_and_audience_switch_drops_private_inpu
     select(&core);
     let _submission = submit(&core, "private");
     let mut changed = source.clone();
-    changed.sessions.first_mut().expect("session").history.item = "c".repeat(64);
+    changed
+        .sessions
+        .first_mut()
+        .expect("session")
+        .history
+        .as_mut()
+        .expect("recorded binding")
+        .item = "c".repeat(64);
     changed.sessions.first_mut().expect("session").revision = 2;
     let mut load = request(send(&core, Event::Refresh));
     let _effects = core
